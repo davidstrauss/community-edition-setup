@@ -1138,7 +1138,7 @@ if __name__ == '__main__':
         installObject.load_properties(installObject.setup_properties_fn)
     else:
         installObject.logIt("%s Properties not found. Interactive setup commencing..." % installObject.setup_properties_fn)
-        installObject.download_prompt()
+        #installObject.download_prompt()
         installObject.promptForProperties()
 
     # Validate Properties
