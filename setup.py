@@ -1048,12 +1048,12 @@ class Setup(object):
         modifyNetworking = self.getPrompt("Update the hostname, hosts, and resolv.conf files?", "No")[0].lower()
         if modifyNetworking == 'y':
             installObject.modifyNetworking = True
-        download_wars = self.getPrompt("Download latest oxAuth and oxTrust war files?", "No")[0].lower()
-        if download_wars == 'y':
-            installObject.downloadWars = True
-        deploy_saml = self.getPrompt("Download and deploy saml IDP and SP?", "No")[0].lower()
-        if deploy_saml == 'y':
-            installObject.downloadSaml = True
+        #download_wars = self.getPrompt("Download latest oxAuth and oxTrust war files?", "No")[0].lower()
+        #if download_wars == 'y':
+        #    installObject.downloadWars = True
+        #deploy_saml = self.getPrompt("Download and deploy saml IDP and SP?", "No")[0].lower()
+        #if deploy_saml == 'y':
+        #    installObject.downloadSaml = True
 
     def downloadWarFiles(self):
         if self.downloadSaml:
