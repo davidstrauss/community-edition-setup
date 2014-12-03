@@ -40,17 +40,27 @@ import getopt
 import hashlib
 
 class Setup(object):
-    def __init__(self):
-        self.setup_properties_fn = "./setup.properties"
-        self.log = 'setup.log'
-        self.logError = 'setup_error.log'
-        self.savedProperties = "./setup.properties.last"
+    def __init__(self, install_dir=None):
+        self.install_dir = install_dir
+        self.setup_properties_fn = "%s/setup.properties" % self.install_dir
+        self.log = '%s/setup.log' % self.install_dir
+        self.logError = '%s/setup_error.log' % self.install_dir
+        self.savedProperties = "%s/setup.properties.last" % self.install_dir
+
         self.gluuOptFolder = "/opt/gluu"
         self.gluuOptBinFolder = "/opt/gluu/bin"
+        self.configFolder = '/etc/gluu/config'
+        self.certFolder = '/etc/certs'
+        self.tomcatHome = '/opt/tomcat'
         self.tomcat_user_home_lib = "/home/tomcat/lib"
+        self.oxauth_lib = "/opt/tomcat/webapps/oxauth/WEB-INF/lib"
+        self.tomcatWebAppFolder = "/opt/tomcat/webapps"
         self.oxBaseDataFolder = "/var/ox"
         self.oxPhotosFolder = "/var/ox/photos"
         self.oxTrustRemovedFolder = "/var/ox/oxtrust/removed"
+        self.etc_hosts = '/etc/hosts'
+        self.etc_hostname = '/etc/hostname'
+
         self.idpFolder = "/opt/idp"
         self.idpMetadataFolder = "/opt/idp"
         self.idpLogsFolder = "/opt/idp/logs"
@@ -64,10 +74,10 @@ class Setup(object):
         self.modifyNetworking = False
         self.downloadSaml = False
 
-        self.oxtrust_war = 'http://ox.gluu.org/maven/org/xdi/oxtrust-server/1.7.0-SNAPSHOT/oxtrust-server-1.7.0-SNAPSHOT.war'
-        self.oxauth_war = 'http://ox.gluu.org/maven/org/xdi/oxauth-server/1.7.0-SNAPSHOT/oxauth-server-1.7.0-SNAPSHOT.war'
+        self.oxtrust_war = 'https://ox.gluu.org/maven/org/xdi/oxtrust-server/1.7.0-SNAPSHOT/oxtrust-server-1.7.0-SNAPSHOT.war'
+        self.oxauth_war = 'https://ox.gluu.org/maven/org/xdi/oxauth-server/1.7.0-SNAPSHOT/oxauth-server-1.7.0-SNAPSHOT.war'
         self.ce_setup_zip = 'https://github.com/GluuFederation/community-edition-setup/archive/master.zip'
-        self.idp_war = 'http://ox.gluu.org/maven/org/xdi/oxIdp/2.4.0-Final/oxIdp-2.4.0-Final.war'
+        self.idp_war = 'https://ox.gluu.org/maven/org/xdi/oxIdp/2.4.0-Final/oxIdp-2.4.0-Final.war'
 
         self.os_types = ['centos', 'redhat', 'fedora', 'ubuntu', 'debian']
         self.os_type = None
@@ -94,16 +104,11 @@ class Setup(object):
         self.oxauthClient_pw = None
         self.encode_salt = "123456789012345678901234"
 
-        self.outputFolder = './output'
-        self.templateFolder = './templates'
-        self.staticFolder = './static/opendj'
-        self.tomcatHome = '/opt/tomcat'
-        self.configFolder = '/etc/gluu/config'
-        self.indexJson = './static/opendj/opendj_index.json'
-        self.certFolder = '/etc/certs'
-        self.gluuHome = '/opt/gluu'
-        self.oxauth_error_json = 'static/oxauth/oxauth-errors.json'
-        self.oxauth_lib = "/opt/tomcat/webapps/oxauth/WEB-INF/lib"
+        self.outputFolder = '%s/output' % self.install_dir
+        self.templateFolder = '%s/templates' % self.install_dir
+        self.staticFolder = '%s/static/opendj' % self.install_dir
+        self.indexJson = '%s/static/opendj/opendj_index.json' % self.install_dir
+        self.oxauth_error_json = '%s/static/oxauth/oxauth-errors.json' % self.install_dir
 
         self.httpdKeyPass = None
         self.httpdKeyFn = '%s/httpd.key' % self.certFolder
@@ -127,13 +132,14 @@ class Setup(object):
         self.importLdifCommand = '%s/bin/import-ldif' % self.ldapBaseFolder
         self.schemaFolder = "%s/template/config/schema" % self.ldapBaseFolder
         self.org_custom_schema = "%s/config/schema/100-user.ldif" % self.ldapBaseFolder
-        self.schemaFiles = ["static/%s/96-eduperson.ldif" % self.ldap_type,
-                            "static/%s/101-ox.ldif" % self.ldap_type,
-                            "static/%s/77-customAttributes.ldif" % self.ldap_type,
-                            "output/100-user.ldif"]
-        self.gluuScriptFiles = ['static/scripts/logmanager.sh',
-                                'static/scripts/testBind.py']
-        self.init_files = ['static/tomcat/tomcat', 'static/opendj/opendj']
+        self.schemaFiles = ["%s/static/%s/96-eduperson.ldif" % (self.install_dir, self.ldap_type),
+                            "%s/static/%s/101-ox.ldif" % (self.install_dir, self.ldap_type),
+                            "%s/static/%s/77-customAttributes.ldif" % (self.install_dir, self.ldap_type),
+                            "%s/output/100-user.ldif" % self.install_dir]
+        self.gluuScriptFiles = ['%s/static/scripts/logmanager.sh' % self.install_dir,
+                                '%s/static/scripts/testBind.py' % self.install_dir]
+        self.init_files = ['%s/static/tomcat/tomcat' % self.install_dir,
+                           '%s/static/opendj/opendj' % self.install_dir]
         self.redhat_services = ['tomcat', 'opendj', 'httpd']
         self.debian_services = [{ 'name' : 'opendj', 'order' : '40', 'runlevel' : '3'},
                                 { 'name' : 'tomcat', 'order' : '50', 'runlevel' : '3'},
@@ -144,7 +150,7 @@ class Setup(object):
         self.tomcat_start_script = '/etc/init.d/tomcat'
 
         self.ldapEncodePWCommand = '%s/bin/encode-password' % self.ldapBaseFolder
-        self.oxEncodePWCommand = '%s/bin/encode.py' % self.gluuHome
+        self.oxEncodePWCommand = '%s/bin/encode.py' % self.gluuOptFolder
         self.keytoolCommand = '/usr/java/latest/bin/keytool'
         self.opensslCommand = '/usr/bin/openssl'
         self.defaultTrustStoreFN = '/usr/java/latest/lib/security/cacerts'
@@ -167,8 +173,6 @@ class Setup(object):
         self.eduperson_schema_ldif = '%s/config/schema/96-eduperson.ldif'
         self.apache2_conf = '%s/httpd.conf' % self.outputFolder
         self.apache2_ssl_conf = '%s/https_gluu.conf' % self.outputFolder
-        self.etc_hosts = '/etc/hosts'
-        self.etc_hostname = '/etc/hostname'
         self.ldif_base = '%s/base.ldif' % self.outputFolder
         self.ldif_appliance = '%s/appliance.ldif' % self.outputFolder
         self.ldif_attributes = '%s/attributes.ldif' % self.outputFolder
@@ -176,8 +180,8 @@ class Setup(object):
         self.ldif_clients = '%s/clients.ldif' % self.outputFolder
         self.ldif_people = '%s/people.ldif' % self.outputFolder
         self.ldif_groups = '%s/groups.ldif' % self.outputFolder
-        self.ldif_site = './static/cache-refresh/o_site.ldif'
-        self.encode_script = '%s/bin/encode.py' % self.gluuHome
+        self.ldif_site = '%s/static/cache-refresh/o_site.ldif' % self.install_dir
+        self.encode_script = '%s/bin/encode.py' % self.gluuOptFolder
 
         self.ldap_setup_properties = '%s/opendj-setup.properties' % self.templateFolder
 
@@ -212,19 +216,20 @@ class Setup(object):
                      self.ldif_groups: False}
 
     def __repr__(self):
-        return ( 'hostname'.ljust(30) + self.hostname.rjust(35) + "\n"
-                 + 'ip'.ljust(30) + self.ip.rjust(35) + "\n"
-                 + 'orgName'.ljust(30) + self.orgName.rjust(35) + "\n"
-                 + 'os'.ljust(30) + self.os_type.rjust(35) + "\n"
-                 + 'city'.ljust(30) + self.city.rjust(35) + "\n"
-                 + 'state'.ljust(30) + self.state.rjust(35) + "\n"
-                 + 'countryCode'.ljust(30) + self.countryCode.rjust(35) + "\n"
-                 + 'support email'.ljust(30) + self.admin_email.rjust(35) + "\n"
-                 + 'tomcat max ram'.ljust(30) + self.tomcat_max_ram.rjust(35) + "\n"
-                 + 'Admin Pass'.ljust(30) + self.ldapPass.rjust(35) + "\n"
-                 + 'Modify Networking'.ljust(30) + `self.modifyNetworking`.rjust(35) + "\n"
-                 + 'Download latest wars'.ljust(30) + `self.downloadWars`.rjust(35) + "\n"
-                 + 'Download and install SAML'.ljust(30) + `self.downloadSaml`.rjust(35) + "\n")
+        s = 'hostname'.ljust(30) + self.hostname.rjust(35) + "\n" \
+            + 'ip'.ljust(30) + self.ip.rjust(35) + "\n" \
+            + 'orgName'.ljust(30) + self.orgName.rjust(35) + "\n" \
+            + 'os'.ljust(30) + self.os_type.rjust(35) + "\n" \
+            + 'city'.ljust(30) + self.city.rjust(35) + "\n" \
+            + 'state'.ljust(30) + self.state.rjust(35) + "\n" \
+            + 'countryCode'.ljust(30) + self.countryCode.rjust(35) + "\n" \
+            + 'support email'.ljust(30) + self.admin_email.rjust(35) + "\n" \
+            + 'tomcat max ram'.ljust(30) + self.tomcat_max_ram.rjust(35) + "\n" \
+            + 'Admin Pass'.ljust(30) + self.ldapPass.rjust(35) + "\n" \
+            + 'Modify Networking'.ljust(30) + `self.modifyNetworking`.rjust(35) + "\n" \
+            + 'Download latest wars'.ljust(30) + `self.downloadWars`.rjust(35) + "\n" \
+            + 'Download and install SAML'.ljust(30) + `self.downloadSaml`.rjust(35) + "\n"
+        return s
 
     def logIt(self, msg, errorLog=False):
         if errorLog:
@@ -465,14 +470,14 @@ class Setup(object):
 
     def gen_openid_keys(self):
         self.logIt("Generating oxAuth OpenID Connect keys")
-        self.copyFile("static/oxauth/java.security", "/usr/java/latest/lib/security")
-        self.copyFile("static/oxauth/lib/oxauth.jar", self.tomcat_user_home_lib)
-        self.copyFile("static/oxauth/lib/jettison-1.3.jar", self.tomcat_user_home_lib)
-        self.copyFile("static/oxauth/lib/oxauth-model.jar", self.tomcat_user_home_lib)
-        self.copyFile("static/oxauth/lib/bcprov-jdk16-1.46.jar", self.tomcat_user_home_lib)
-        self.copyFile("static/oxauth/lib/commons-codec-1.5.jar", self.tomcat_user_home_lib)
-        self.copyFile("static/oxauth/lib/commons-lang-2.6.jar", self.tomcat_user_home_lib)
-        self.copyFile("static/oxauth/lib/log4j-1.2.14.jar", self.tomcat_user_home_lib)
+        self.copyFile("%s/static/oxauth/java.security" % self.install_dir, "/usr/java/latest/lib/security")
+        self.copyFile("%s/static/oxauth/lib/oxauth.jar" % self.install_dir, self.tomcat_user_home_lib)
+        self.copyFile("%s/static/oxauth/lib/jettison-1.3.jar" % self.install_dir, self.tomcat_user_home_lib)
+        self.copyFile("%s/static/oxauth/lib/oxauth-model.jar" % self.install_dir, self.tomcat_user_home_lib)
+        self.copyFile("%s/static/oxauth/lib/bcprov-jdk16-1.46.jar" % self.install_dir, self.tomcat_user_home_lib)
+        self.copyFile("%s/static/oxauth/lib/commons-codec-1.5.jar" % self.install_dir, self.tomcat_user_home_lib)
+        self.copyFile("%s/static/oxauth/lib/commons-lang-2.6.jar" % self.install_dir, self.tomcat_user_home_lib)
+        self.copyFile("%s/static/oxauth/lib/log4j-1.2.14.jar" % self.install_dir, self.tomcat_user_home_lib)
 
         self.change_ownership()
 
@@ -725,7 +730,7 @@ class Setup(object):
                       '%s' % importCmd])
 
         self.logIt("Importing site LDIF")
-        self.copyFile("static/cache-refresh/o_site.ldif", ldifFolder)
+        self.copyFile("%s/static/cache-refresh/o_site.ldif" % self.install_dir, ldifFolder)
         site_ldif_fn = "%s/o_site.ldif" % ldifFolder
         self.run(['/bin/chown', 'ldap:ldap', site_ldif_fn])
         importCmd = " ".join(['cd %s/bin ; ' % self.ldapBaseFolder,
@@ -869,8 +874,8 @@ class Setup(object):
         self.run(['/bin/chmod', '-R', 'u+X', self.certFolder])
 
     def copy_static(self):
-        self.copyFile("static/oxauth/oxauth-id-gen.py", "%s/conf" % self.tomcatHome)
-        self.copyFile("static/tomcat/server.xml", "%s/conf" % self.tomcatHome)
+        self.copyFile("%s/static/oxauth/oxauth-id-gen.py" % self.install_dir, "%s/conf" % self.tomcatHome)
+        self.copyFile("%s/static/tomcat/server.xml" % self.install_dir, "%s/conf" % self.tomcatHome)
 
     def getPrompt(self, prompt, defaultValue=None):
         try:
@@ -978,26 +983,8 @@ class Setup(object):
                 self.logIt(traceback.format_exc(), True)
         return return_value
 
-    def download_prompt(self):
-        download_wars = self.getPrompt("Download latest oxAuth and oxTrust war files?", "No")[0].lower()
-        if download_wars == 'y':
-            self.downloadWars = True
-        deploy_saml = self.getPrompt("Download and deploy saml IDP and SP?", "No")[0].lower()
-        if deploy_saml == 'y':
-            self.downloadSaml = True
-        download_setup = self.getPrompt("Download latest Gluu Server setup files (requires exit)", "No")[0].lower()
-        if download_setup == 'y':
-            self.run(['/usr/bin/wget', self.ce_setup_zip, '-O', '/tmp/master.zip'])
-            self.run(['/bin/rm', '-rf', '/install'])
-            self.run(['/usr/bin/unzip', '/tmp/master.zip', '-d', '/tmp'])
-            self.run(['/bin/mv', '/tmp/community-edition-setup-master', '-d', '/install'])
-            print "\n\n ** Downloaded fresh setup file. Exiting... re-run /install/setup.py **\n\n"
-            sys.exit()
-
     def modify_netowrking_prompt(self):
-        modify_networking = self.getPrompt("Update the hostname, hosts, and resolv.conf files?", "No")[0].lower()
-        if modify_networking == 'y':
-            self.modifyNetworking = True
+        if self.modifyNetworking:
             self.ce_templates[self.etc_hosts] = True
             self.ce_templates[self.etc_hostname] = True
 
@@ -1058,63 +1045,74 @@ class Setup(object):
         installObject.tomcat_max_ram = installObject.getPrompt("Enter maximum RAM for tomcat in MB", '1024')
         randomPW = installObject.getPW()
         installObject.ldapPass = installObject.getPrompt("Optional: enter password for oxTrust and LDAP superuser", randomPW)
-
-    def print_help(self):
-        print "\nUse setup.py to configure your Gluu Server and to add initial data required for"
-        print "oxAuth and oxTrust to start. If setup.properties is found in this folder, these"
-        print "properties will automatically be used instead of the interactive setup."
-        print "Options:"
-        print ""
-        print "    -h   Help"
-        print "    -f   specify setup.properties file"
-        print "    -n   No interactive prompt before install starts."
+        modifyNetworking = self.getPrompt("Update the hostname, hosts, and resolv.conf files?", "No")[0].lower()
+        if modifyNetworking == 'y':
+            installObject.modifyNetworking = True
+        download_wars = self.getPrompt("Download latest oxAuth and oxTrust war files?", "No")[0].lower()
+        if download_wars == 'y':
+            installObject.downloadWars = True
+        deploy_saml = self.getPrompt("Download and deploy saml IDP and SP?", "No")[0].lower()
+        if deploy_saml == 'y':
+            installObject.downloadSaml = True
 
     def downloadWarFiles(self):
-        if self.downloadSaml == True:
-            print "Downloading latest idp..."
-            self.run(['/usr/bin/wget', self.idp_war, '-O', '/opt/idp/war/idp.war'])
+        if self.downloadSaml:
+            print "Downloading latest Shibboleth idp war file..."
+            self.run(['/usr/bin/wget', self.idp_war, '-O', '%s/idp.war' % self.idpWarFolder])
 
-        if self.downloadWars == True:
-            print "Downloading latest oxAuth... "
-            self.run(['/usr/bin/wget', self.oxauth_war, '-O', '/opt/tomcat/webapps/oxauth.war'])
-            print "Downloading latest oxTrust..."
-            self.run(['/usr/bin/wget', self.oxtrust_war, '-O', '/opt/tomcat/webapps/identity.war'])
+        if self.downloadWars:
+            print "Downloading latest oxAuth war file..."
+            self.run(['/usr/bin/wget', self.oxauth_war, '-O', '%s/oxauth.war' % self.tomcatWebAppFolder])
+            print "Downloading latest oxTrust war file..."
+            self.run(['/usr/bin/wget', self.oxtrust_war, '-O', '%s/identity.war' % self.tomcatWebAppFolder])
             print "Finished downloading latest war files"
 
-    def getOpts(self, argv):
-        self.logIt("Parsing command line options")
-        setup_properties = None
-        noPrompt = False
-        try:
-            opts, args = getopt.getopt(argv, "hnf:")
-        except getopt.GetoptError:
-            self.print_help()
-            sys.exit(2)
-        for opt, arg in opts:
-            if opt == '-h':
-                self.print_help()
-                sys.exit()
-            elif opt == "-f":
-                try:
-                    if os.path.isfile(arg):
-                        setup_properties = arg
-                        self.logIt("setup.properties specified as %s" % arg)
-                        print "Found setup properties %s\n" % arg
-                    else:
-                        print "\nOoops... %s file not found\n" % arg
-                except:
-                    print "\nOoops... %s file not found\n" % arg
-            elif opt == "-n":
-                self.logIt("-n option specified. No interactive confirmation before proceeding.")
-                noPrompt = True
-        return setup_properties, noPrompt
+def print_help():
+    print "\nUse setup.py to configure your Gluu Server and to add initial data required for"
+    print "oxAuth and oxTrust to start. If setup.properties is found in this folder, these"
+    print "properties will automatically be used instead of the interactive setup."
+    print "Options:"
+    print ""
+    print "    -h   Help"
+    print "    -f   specify setup.properties file"
+    print "    -d   specify directory of installation"
+    print "    -n   No interactive prompt before install starts."
 
-if __name__ == '__main__':
-    installObject = Setup()
+def getOpts(argv, install_dir=None):
     setup_properties = None
     noPrompt = False
+    try:
+        opts, args = getopt.getopt(argv, "d:hnf:")
+    except getopt.GetoptError:
+        print_help()
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-h':
+            print_help()
+            sys.exit()
+        elif opt == '-d':
+            install_dir = arg
+        elif opt == "-f":
+            try:
+                if os.path.isfile(arg):
+                    setup_properties = arg
+                    print "Found setup properties %s\n" % arg
+                else:
+                    print "\nOoops... %s file not found\n" % arg
+            except:
+                print "\nOoops... %s file not found\n" % arg
+        elif opt == "-n":
+            noPrompt = True
+    return setup_properties, noPrompt, install_dir
+
+if __name__ == '__main__':
+    setup_properties = None
+    noPrompt = False
+    install_dir = "."
     if len(sys.argv) > 1:
-        setup_properties, noPrompt = installObject.getOpts(sys.argv[1:])
+        setup_properties, noPrompt, install_dir = getOpts(sys.argv[1:], install_dir)
+    installObject = Setup(install_dir)
+
     print "\nInstalling Gluu Server...\n\nFor more info see:\n  %s  \n  %s\n" % (installObject.log, installObject.logError)
     print "\n** All clear text passwords contained in %s.\n" % installObject.savedProperties
     try:
@@ -1138,7 +1136,6 @@ if __name__ == '__main__':
         installObject.load_properties(installObject.setup_properties_fn)
     else:
         installObject.logIt("%s Properties not found. Interactive setup commencing..." % installObject.setup_properties_fn)
-        #installObject.download_prompt()
         installObject.promptForProperties()
 
     # Validate Properties
