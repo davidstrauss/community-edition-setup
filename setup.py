@@ -802,6 +802,7 @@ class Setup(object):
                     self.logIt("Error writing %s to %s" % (output_fn, dest_fn), True)
                     self.logIt(traceback.format_exc(), True)
         self.copyFile(self.oxauth_error_json, "%s/conf" % self.tomcatHome)
+
         self.run([service_path, apache_service_name, 'start'])
 
     def copy_scripts(self):
@@ -876,6 +877,9 @@ class Setup(object):
     def copy_static(self):
         self.copyFile("%s/static/oxauth/oxauth-id-gen.py" % self.install_dir, "%s/conf" % self.tomcatHome)
         self.copyFile("%s/static/tomcat/server.xml" % self.install_dir, "%s/conf" % self.tomcatHome)
+
+        os.makedirs("%s/conf/template/conf" % self.tomcatHome)
+        self.copyFile("%s/static/oxtrust/oxTrustCacheRefresh-template.properties.vm" % self.install_dir, "%s/conf/template/conf" % self.tomcatHome)
 
     def getPrompt(self, prompt, defaultValue=None):
         try:
@@ -1048,12 +1052,12 @@ class Setup(object):
         modifyNetworking = self.getPrompt("Update the hostname, hosts, and resolv.conf files?", "No")[0].lower()
         if modifyNetworking == 'y':
             installObject.modifyNetworking = True
-        #download_wars = self.getPrompt("Download latest oxAuth and oxTrust war files?", "No")[0].lower()
-        #if download_wars == 'y':
-        #    installObject.downloadWars = True
-        #deploy_saml = self.getPrompt("Download and deploy saml IDP and SP?", "No")[0].lower()
-        #if deploy_saml == 'y':
-        #    installObject.downloadSaml = True
+        download_wars = self.getPrompt("Download latest oxAuth and oxTrust war files?", "No")[0].lower()
+        if download_wars == 'y':
+            installObject.downloadWars = True
+        deploy_saml = self.getPrompt("Download and deploy saml IDP and SP?", "No")[0].lower()
+        if deploy_saml == 'y':
+            installObject.downloadSaml = True
 
     def downloadWarFiles(self):
         if self.downloadSaml:
