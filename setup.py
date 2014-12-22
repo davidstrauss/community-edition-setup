@@ -1120,7 +1120,7 @@ class Setup(object):
             print "Finished downloading latest war files"
     
     def install_cas_war(self):
-        casWar = 'ox-cas-server-webapp-%s.war' % self.oxVersion
+        casWar = 'ox-cas-server-webapp.war'
         distCasPath = '%s/%s' % (self.distFolder, casWar)
         tmpCasDir = '%s/tmp_cas' % self.distFolder
 
