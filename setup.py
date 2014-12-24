@@ -45,7 +45,7 @@ class Setup(object):
 
         self.oxVersion = '1.7.0.Beta5'
         self.githubBranchName = 'version_1.7'
-        self.promptDownloadWars = False
+        self.promptDownloadWars = True
 
         self.distFolder = "/opt/dist"
 

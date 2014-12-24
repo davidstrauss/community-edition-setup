@@ -20,11 +20,30 @@
  * Asimba - Serious Open Source SSO - More information on www.asimba.org
  * 
  -->
+<!--
+ 
+  asimba-baseline.xml
+  
+  The baseline configuration configures a fully functional Asimba server instance that
+  works out of the box. 
+  
+  Purpose of the baseline configuration, is to provide a simple and working version
+  that can be used to play around your own working Asimba deployment.
+  
+  The following basic features are supported:
+  - SAML2 IDP, presenting as EntityID "entity:asimba1"
+  - Username/password authentication for some testusers
+  
+  The only required configuration is to add your own application to the known requestors.
+  
+  Please see the instructions on asimba.org how to do this, as well as a number
+  of tasks that can be performed with the baseline configuration as starting point.
 
+ -->
 <asimba-server>
 	<!--  Server configuration -->
-	<server id="%(hostname)s" friendlyname="Gluu Asimba Proxy">
-		<organization id="%(hostname)s" friendlyname="Gluu Asimba SSO"/>
+	<server id="asimba1" friendlyname="Asimba Baseline Server">
+		<organization id="asimba.org" friendlyname="Asimba SSO"/>
 	</server>
 
 	<!-- 
@@ -32,8 +51,7 @@
 		and keystores that are used for protocol operations. There is a keystore that holds
 		the cryptographic credentials (private- and public key and certificate) of the server itself
 		as well as a truststore, that works as a placeholder for certificates of trusted entities 
-		For using SHA2 as signing algorithm, the value of signing algorithm 
-		should be "SHA256withRSA" -->
+	 -->
 	<crypto>
 		<message_digest algorithm="SHA1"/>		
 		<random_generator algorithm="SHA1PRNG" />
@@ -41,11 +59,11 @@
 		<signing algorithm="SHA1withRSA">
 			<signingfactory class="com.alfaariss.oa.engine.crypto.keystore.KeystoreSigningFactory">
 				<keystore>
-					<file>%(asimbaJksFn)s</file>
+					<file>${webapp.root}/WEB-INF/sample-data/asimba-demo-keystore.jks</file>
 					<type>JKS</type>
-					<keystore_password>%(asimbaJksPass)</keystore_password>		
-					<alias>%(hostname)</alias>	
-					<password>%(asimbaJksPass)</password>
+					<keystore_password>changeit</keystore_password>		
+					<alias>asimba-demo</alias>	
+					<password>changeit</password>
 				</keystore>
 	
 				<!-- No truststore in baseline config yet; to enable the truststore, rename 
@@ -77,6 +95,77 @@
 	    <max>100</max>
 	</tgtfactory>  
 	
+	<!-- Configure User Provisioning
+	     The main section defines which translator (from username to resolved user instance) is
+	     used.
+	 -->
+	<userfactory class="com.alfaariss.oa.engine.user.provisioning.ProvisioningFactory">
+		<main>
+			<translator>standard</translator>
+		</main>
+		
+		<!-- Translator links a user provisioning profile and a back-end store that the profile 
+		     works on
+		-->
+		<translator id="standard" class="com.alfaariss.oa.engine.user.provisioning.translator.standard.StandardTranslator">
+			<!--
+				'main' configures which external storage and which translator-profile are used
+				as userfactory
+			 -->
+			<main>
+				<externalstorage>asimba_users</externalstorage>
+				<profile>file</profile>
+			</main>
+			
+			<!--
+				'profile' configures a translator-profile
+				the fields that can be defined as attribute of 'account/enabled@' and 'account/method/registered'
+				can be cached in the user's attributes
+			 -->
+			<profile id="file" class="com.alfaariss.oa.engine.user.provisioning.translator.standard.StandardProfile">
+				<account>
+					<!-- enabled: configure whether the account is enabled; the baseline configuration
+					     makes this dependent on whether the useraccount includes an attribute with
+					     the name 'phonenr'  -->
+					<enabled default="false" field="phonenr" converter="converter.exists" />
+					
+					<!-- authentication: define the authentication methods that a user from this factory
+					     is allowed to use; this can be fine-tuned even further with the 'registered'-element
+					 -->
+					<authentication>
+						<method id="GuestMethod">
+							<registered default="true" />
+						</method>
+						<method id="IdentifyingMethod">
+							<registered default="true" />
+						</method>
+						<method id="AsimbaUsersXmlPassword">
+							<registered default="true" />
+						</method>
+						<method id="SMSCMAuthMethod">
+							<registered default="false" field="phonenr" converter="converter.exists" />
+						</method>
+					</authentication>
+				</account>
+				<!-- convertermanager: configure rules that can be applied on the enabled-property of the account
+				     or on registered-properties of authenticationmethods, to be able to control the behavior
+				-->
+				<convertermanager> 
+					<converter id="converter.exists"
+						class="com.alfaariss.oa.engine.user.provisioning.translator.standard.converter.exist.ExistConverter"/>
+				</convertermanager>
+			</profile>
+		</translator>
+		<!-- storagemanager: configure a backend data stores for user provisioning, that can be linked with
+		     translator-profiles to provide user instances in the appropriate context  
+		-->
+		<storagemanager>			
+			<storage id="asimba_users" class="org.asimba.engine.user.provisioning.external.storage.file.AsimbaUsersXml">
+				<file>${webapp.root}/WEB-INF/sample-data/asimba-users.xml</file>
+			</storage>
+		</storagemanager>
+	</userfactory>
+	
 	<!-- 
 		RequestorPoolFactory defines how requestors (sp's) are defined; they can be defined in this configuration file,
 		but they can also be sourced from a table, available through a JDBC-connection (not in baseline config)
@@ -90,52 +179,48 @@
 	<requestorpoolfactory class="com.alfaariss.oa.engine.requestor.configuration.ConfigurationFactory">
 		<pool id="requestorpool.1" friendlyname="Requestor Pool 1" enabled="true">
 			<authentication forced="false">
-				<profile id="remote.saml2" />
+				<profile id="local.guest" />
+				<profile id="local.identifying" />
+				<profile id="local.asimba.passwd" />
+				<profile id="local.sms.cm" />
+				<profile id="local.pwdplussms" />
 			</authentication>
-
-    <!--
-       This configuration is for SP which will be connected with Asimba server.
-       Add SP / protecte location in requestFactory section.
-       * Requestor ID: It should be the entityID of SP
-       * FriendlyName: It can be anything. Should be human readable.
-       * enabled: true -->
-
-            <requestors>
-<!--                
-                <requestor id="$$ENTITYID_OF_SP_1"
-                    friendlyname="$$FRIENDLYNAME_FOR_SP"
-                    enabled="true" />
--->
-            </requestors>
-
-            <!--START: Demo -->
-  			<requestor id="demo-aselect-sp" friendlyname="Test Request A-Select SP" enabled="true">
-				<properties>
-					<property name="aselect.app_level" value="9" />
-				</properties>                    
-			</requestor>
-			<requestor id="localhost/AsimbaSimpleSP" 
-				friendlyname="Asimba Simple SP" 
-				enabled="true" />
-            <!--END: Demo -->
+			<requestors>
+				 <requestor id="demo-aselect-sp" friendlyname="Test Request A-Select SP" enabled="true">
+				 	<properties>
+						<property name="aselect.app_level" value="9" />
+					</properties>                    
+				 </requestor>
+				<requestor id="localhost/AsimbaSimpleSP" 
+					friendlyname="Asimba Simple SP" 
+					enabled="true" />
+			</requestors>
 			
-            <authorization>
-                <post profile="postauthz.1" />
-            </authorization>
-
-            <attributerelease policy="asimba.releasepolicy.1" />
-        </pool>
-    </requestorpoolfactory>
-        
+			<attributerelease policy="asimba.releasepolicy.1" />
+		</pool>
+	</requestorpoolfactory>
 
 	<!-- authentication: define Authentication Profiles; an AuthenticationProfile is made up of one or 
 	     more authentication methods, which are executed sequentially. The behaviour of the actual authentication
 	     methods is defined in the websso section of the configuration  -->
-    <authentication class="com.alfaariss.oa.engine.authentication.configuration.ConfigurationFactory">
-        <profile id="remote.saml2" friendlyname="remote.saml2" enabled="true">
-            <method id="RemoteSAML" />
-        </profile>
-    </authentication>
+	<authentication class="com.alfaariss.oa.engine.authentication.configuration.ConfigurationFactory">
+		<profile id="local.guest" friendlyname="Login as guest" enabled="true">
+			<method id="GuestAuthenticationMethod" /> 
+		</profile>
+		<profile id="local.identifying" friendlyname="Login with provided username without authentication" enabled="true">
+			<method id="IdentifyingMethod" />
+		</profile>
+		<profile id="local.asimba.passwd" friendlyname="Login from Asimba userstore (password)" enabled="true">
+			<method id="AsimbaUsersXmlPassword" />
+		</profile>
+		<profile id="local.sms.cm" friendlyname="Login with SMS Authentication (CM gateway)" enabled="true">
+			<method id="SMSCMAuthMethod" />
+		</profile>
+		<profile id="local.pwdplussms" friendlyname="Login with Username/Password and SMS authentication (CM gateway)" enabled="true">
+			<method id="AsimbaUsersXmlPassword" />
+			<method id="SMSCMAuthMethod" />
+		</profile>
+	</authentication>	
 
 	<!-- websso: configure the behaviour of the server frontend. This is made up of
 	       * authentication: the authentication methods
@@ -145,93 +230,147 @@
 	<websso>
 		<authentication always_show_select_form="false">
 			<methods>
-                <method id="RemoteSAML" friendlyname="Remote SAML authentication"
-                        enabled="true"
-                        response_signing_required="true"
-                        class="com.alfaariss.oa.authentication.remote.saml2.SAML2AuthenticationMethod">
-
-						<!-- Custom attribute will be configured here map ext == The source attribute ( i.e: uid, email etc)
-							int == The name of custom attribute  -->
-						<attributemapper>
-<!--
-		                    <map ext="urn:oid:0.9.2342.19200300.100.1.1" int="$$CustomAttribute" />
--->
-		                </attributemapper>
-		
-						<!-- The SAML2 IDP Profile that services the ResponseEndpoint for the Remote SAML2 AuthenticationMethod, implementing a SAML2 SP  -->
-		                <idpprofile id="saml2" />
-		
-					    <!-- When IDP could not be automatically selected, use a selector component to select an IDP -->
-		                <selector
-		                    class="com.alfaariss.oa.authentication.remote.saml2.selector.DefaultSelector"
-		                    always_show_select_form="false" />
-
-                  
-						<!-- Indicate whether logout is supported by the SAML-SP profile -->
-						<logout enabled="false" />
-
-						<authnstmt>
-							<window before_offset="1800" after_offset="60" />
-						</authnstmt>
-
-						<!--
-							<idps> configure the IDP's that this SAML-SP can use to request authentication. Configure remote IDP/ADFS which will do the authenticati                    on. 
-							* Download the metdata of remote IDP/ADFS and save it in some location with xml extension. 
-							* Grab the Base64 encoded SAML certificate of this IDP/ADFS and insert it in the JKS. Check �Work on keystore� in: 
-							    http://www.gluu.org/docs/admin-guide/saml/inbound-saml/#asimba-configuration-with-gluu-server
-							* idp id: It should be the entityID of remote IDP/ADFS
-							* friendlyName: Anything human readable
-							* scoping: false
-							* avoid_subjectconfirmation: false
-							* nameidpolicy enabled: false
-							* �file�: Provide the absolute location of metadata -->
-
-						<idps id="saml2idps-chained"
-                                class="com.alfaariss.oa.authentication.remote.saml2.idp.storage.config.IDPConfigStorage">
-
-                                <!-- our own trusted idp federation -->
-<!--                                
-                                    <idp id="<$$ENTITYID_OF_IDP_1" friendlyname="<$$FRIENDLYNAME_OF_IDP_1" scoping="true"
-                                        avoid_subjectconfirmation="false">
-                                        <nameidpolicy enabled="false" />
-                                            <metadata>
-                                                <file>${webapp.root}/WEB-INF/metadata/idp/$METADATA_OF_IDP_1.xml</file>
-                                            </metadata>
-                                    </idp>
- -->
-						</idps>
-					</method>
-				</methods>
-		</authentication>
-		
-		<postauthorization enabled="true">
-			<methods>
-				<method id="AuthnContextToUserAttributesMethod" friendlyname="Add AuthenticationContext attributes to User attributes" class="org.asimba.custom.postauthz.authncontextattribute.AuthnContextToUserAttributes" enabled="true">
-					<attributes>
-						<attribute authnmethod="RemoteSAML" src="issuer" dest="issuerIDP" required="true" />
-					</attributes>
+				<!--
+					The Guest Authentication Method immediately returns the identity of a configured user
+					The guest user is identified by the user@id attribute, and must exist in the
+					UserFactory
+				 -->
+				<method id="GuestAuthenticationMethod" friendlyname="Guest authentication" enabled="true" 
+					class="com.alfaariss.oa.authentication.guest.GuestAuthenticationMethod">
+					<user id="guest"/>
+				</method>
+				
+				<!-- 
+					The Identifying Authentication Method requests a userid. When this userid exists, the
+					user is established as authenticated user. So, no authentication is performed. It does
+					require the user ot enter an existing (UserFactory provided) userid.
+					Use this to test stuff.
+				 -->
+				<method id="IdentifyingMethod" friendlyname="Identifying provided username" enabled="true"
+					class="com.alfaariss.oa.authentication.identifying.IdentifyingAuthenticationMethod">
+					<!-- retries: number of tries before stopping, -1 for unlimited attempts -->
+					<retries>-1</retries>
+					
+					<!-- template@path: the JSP file that is presented to the user in which she can
+					     provide the user-id that will be looked up in the UserFactory 
+					-->
+					<template path="/ui/sso/authn/identifying/identifying.jsp" />
+				</method>
+			
+				<!-- 
+					The AsimbaUsersXml Password method uses the asimba-users.xml file as input to
+					authenticate users. The method can be configured with a password entry JSP-template,
+					and the number of password attempts that a user has 
+				 -->
+				<method id="AsimbaUsersXmlPassword" friendlyname="Password authentication (AsimbaUsers)" enabled="true"
+					class="com.alfaariss.oa.authentication.password.PasswordAuthenticationMethod">
+					<template path="/ui/sso/authn/password/password.jsp" />
+					<retries>1000</retries>
+					
+					<!-- Password Handler -->
+					<password_handler class="org.asimba.am.password.asimbausersxml.AsimbaUsersXmlHandler">
+						<default realm="@asimba.org"/>
+						<resource realm="@asimba.org" 
+							file="${webapp.root}/WEB-INF/sample-data/asimba-users.xml">
+							<full_uid>false</full_uid>
+						</resource>
+					</password_handler>
+				</method>
+				
+				
+				<!-- 
+					The SMS CM AuthMethod configures the One Time Password through SMS authentication method
+					There are two templates required:
+					<ul>
+					<li>idtemplate: the page that presents a form to the user to ask for the user identity;
+						when another authentication has already established the identity of the user,
+						this screen will not be shown</li>
+					<li>pwdetmplate: the page that requests the password from the user</li>
+					</ul>
+					The method itself can be further configured with a custom OTP handler, that defines
+					how the actual OneTimePassword-code is generated, and a custom OTP distributor that
+					defines how the password is being delivered to the user
+				 -->
+				<method id="SMSCMAuthMethod" friendlyname="SMS Authentication using CM Gateway" enabled="true"
+						class="org.asimba.auth.smsotp.OTPAuthenticationMethod">
+					<retries>3</retries>
+					<idtemplate path="/ui/sso/authn/otp/id.jsp" />
+					<pwdtemplate path="/ui/sso/authn/otp/pwd.jsp" />
+					
+					<!-- OneTimePassword configuration -->
+					<otp_handler class="org.asimba.auth.smsotp.generator.BasicOTPGenerator">
+						<salt>12345</salt>
+						<length>6</length>
+						<!-- allowed_age defines the number of seconds that a generated password remains valid -->
+						<allowed_age>600</allowed_age>
+  					</otp_handler>
+					
+					<!-- disabledistribute: 
+					     optional argument to disable actual distribution of an OTP; it will write the
+					     OTP to be sent to the log (debug-level)
+					 -->
+					<disabledistribute>true</disabledistribute>
+					
+					<!-- otp_distributor:
+					     required configuration of an IOTPDistributor implementation that takes
+					     care of the actual distribution of the password that was generated by the otp_handler
+					     Each distributor has its own configuration options; listed below are ways to configure
+					     the OTP distribution through SMS by gateways from CM and Mollie (dutch providers) 
+					 -->
+					<otp_distributor class="org.asimba.auth.smsotp.distributor.cm.CMOTPDistributor">
+						<!-- url, customer, login and password are settings that are provided by CM
+						     and used for connecting to the appropriate gateway
+						-->
+						<url>https://secure.cm.nl/smssgateway/cm/gateway.ashx</url>
+						<customerid>9999</customerid>
+						<login>customer-login</login>
+						<password>password</password>
+						
+						<!-- phonenrattribute: user attribute that is used to figure out the phonenr
+						     to send the sms message to;
+						     It is recommended to configure this attribute as AuthMethod-enabling attribute 
+						     in the /asimba/userfactory/translator/profile/account config section -->
+						<phonenrattribute>phonenr</phonenrattribute>
+						
+						<!-- from: name of the sender of the SMS message to the user's phone -->  
+						<from>AsimbaSSO</from>
+						
+						<!-- messagetemplate: actual message that is sent; use :1 as placeholder for
+						     the actual generated password -->
+						<messagetemplate>Your code is :1</messagetemplate>
+					</otp_distributor>
 				</method>
 			</methods>
+		</authentication>
+		
+		<!-- 
+		<postauthorization enabled="true">
+			<method id="[some-method]" friendlyname="[some-methods-friendlyname]"
+				class="[implementation-of-IWebAuthorizationMethod]"
+				enabled="true"
+				action="[authorization-action-id]">
+			</method>
+			<actions>
+				<action id="authorization-action-id" friendlyname="[some-actions-friendlyname]"
+					class="[implementation-of-IAuthorizationAction]"
+					enabled="true">
+				</action>
+			</actions>
 		</postauthorization>
+		 -->
 	</websso>
 	
-	<!--  
-        IDP Profiles.
-        Configure the �baseURL� of Asimba Proxy server. Just add the hostname of your IDP. Rest of the URL will be same as it is by default. -->	
-
+	<!--  IDP Profiles -->	
 	<profiles>
 		<profile id="saml2" class="com.alfaariss.oa.profile.saml2.SAML2Profile">
-			<baseURL>https://%(hostaname)s/asimba/profiles/saml2</baseURL>
+			<baseURL>http://localhost:8080/asimba-wa/profiles/saml2</baseURL>
 			<websso path="/sso/web" />
 			
 			<!-- 
 				requestors : configure the SAML-specific attributes of the requestors that have been
 					declared in the requestorpoolfactory/requestors section
 					When a requestor is not configured here, it is not considered to be a trusted SP
-                    Add metadata of remote SP
-                    requestor id: entityID of remote SP/protected location
-                    �file�: Absolute path of SP metadata. -->
-
+			 -->
 			<requestors signing="TRUE">
 				<requestor id="localhost/AsimbaSimpleSP" 
 						signing="FALSE">
@@ -257,7 +396,7 @@
 				Metadata configuration allows specific attributes of the SAML entity to be entered
 				so they can be published as part of the metadata
 			 -->
-			<metadata entityID="https://%(hostaname)s/asimba/profiles/saml2">
+			<metadata entityID="http://localhost:8080/asimba-wa/profiles/saml2">
 				<signing enabled="TRUE"/>
 				<organization url="http://www.asimba.org"/>
 			</metadata>
@@ -376,12 +515,12 @@
 		
 		<!-- Also add development profile aselect: -->
 		<profile id="aselect" class="com.alfaariss.oa.profile.aselect.processor.ASelectProcessor" >
-			<redirect_url>https://%(hostaname)s/asimba/profiles/aselect</redirect_url>
+			<redirect_url>http://localhost:8080/asimba-wa/profiles/aselect</redirect_url>
 			
 			<!-- optional websso configuration tweaks -->
 			<websso>
 				<path>/sso</path>
-				<url>https://%(hostaname)s/asimba/sso</url>
+				<url>http://localhost:8080/asimba-wa/sso</url>
 			</websso>
 			
 			<!-- optional error configuration tweaks -->
@@ -475,14 +614,14 @@
 	<!--
 	  <postauthorization> defines which profiles are available in this server instance 
 	 -->
-	 
+	 <!--
 	 <postauthorization class="com.alfaariss.oa.engine.authorization.configuration.ConfigurationFactory"
 	 		enabled="true">
-	 	<profile id="postauthz.1" friendlyname="Default PostAuthorization Profile" enabled="true">
-	 		<method id="AuthnContextToUserAttributesMethod" />
+	 	<profile id="[define-postauthorization-profile]" friendlyname="[profiles-friendlyname]" enabled="[true/false]">
+	 		<method id="[reference-postauthz-method-id]" />
 	 	</profile>
 	 </postauthorization>
-	
+	  -->
 	  
 	
 	
