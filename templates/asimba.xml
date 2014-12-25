@@ -43,9 +43,9 @@
 				<keystore>
 					<file>%(asimbaJksFn)s</file>
 					<type>JKS</type>
-					<keystore_password>%(asimbaJksPass)</keystore_password>		
-					<alias>%(hostname)</alias>	
-					<password>%(asimbaJksPass)</password>
+					<keystore_password>%(asimbaJksPass)s</keystore_password>		
+					<alias>%(hostname)s</alias>	
+					<password>%(asimbaJksPass)s</password>
 				</keystore>
 	
 				<!-- No truststore in baseline config yet; to enable the truststore, rename 
