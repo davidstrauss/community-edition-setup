@@ -180,7 +180,7 @@ echo -ne "Starting Gluu-Server components.... \n" 2>&1 |tee -a $update_log
 
 else
     echo -ne "Some components were not stopped \n" 2>&1 |tee -a $update_log
-    echo -ne "Please see $update log\nand stop hanged services manually\n" 2>&1 |tee -a $update_log
+    echo -ne "Please see $update log\nand stop hanged services manually\nand start update.sh once more" 2>&1 |tee -a $update_log
     exit 1
 fi
 
