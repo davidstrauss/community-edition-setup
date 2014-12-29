@@ -121,7 +121,7 @@ sleep 1
 /bin/mkdir -p $backup
 fi
 
-sleep 5
+sleep 7
 
 status=(`ps aux |grep  -Eohw 'tomcat|httpd|opendj' | sort| uniq -d`)
 
@@ -180,6 +180,7 @@ echo -ne "Starting Gluu-Server components.... \n" 2>&1 |tee -a $update_log
 
 else
     echo -ne "Some components were not stopped \n" 2>&1 |tee -a $update_log
+    echo -ne "Please see $update log\nand stop hanged services manually\n" 2>&1 |tee -a $update_log
     exit 1
 fi
 
