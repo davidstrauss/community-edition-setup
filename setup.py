@@ -45,10 +45,31 @@ class Setup(object):
 
         self.oxVersion = '1.7.0.Beta6'
         self.githubBranchName = 'version_1.7'
-        self.promptDownloadWars = False
+
+        # Used only if -w (get wars) options is given to setup.py
+        self.oxtrust_war = 'https://ox.gluu.org/maven/org/xdi/oxtrust-server/%s/oxtrust-server-%s.war' % (self.oxVersion, self.oxVersion)
+        self.oxauth_war = 'https://ox.gluu.org/maven/org/xdi/oxauth-server/%s/oxauth-server-%s.war' % (self.oxVersion, self.oxVersion)
+        self.idp_war = 'http://ox.gluu.org/maven/org/xdi/oxidp/%s/oxidp-%s.war' % (self.oxVersion, self.oxVersion)
+        self.asimba_war = "http://ox.gluu.org/maven/org/xdi/oxasimba-proxy/%s/oxasimba-proxy-%s.war" % (self.oxVersion, self.oxVersion)
+        self.cas_war = "http://ox.gluu.org/maven/org/xdi/oxcas/%s/oxcas-%s.war" % (self.oxVersion, self.oxVersion) # TODO lookup URL!
+        self.ce_setup_zip = 'https://github.com/GluuFederation/community-edition-setup/archive/%s.zip' % self.githubBranchName
+
+        self.modifyNetworking = False
+        self.downloadWars = None
+
+        self.components = {'oxauth':  {'enabled': True},
+                           'oxtrust': {'enabled': True},
+                           'ldap':    {'enabled': True},
+                           'httpd':   {'enabled': True},
+                           'saml':    {'enabled': False},
+                           'asimba':  {'enabled': False},
+                           'cas':     {'enabled': False}
+        }
+
+        self.os_types = ['centos', 'redhat', 'fedora', 'ubuntu', 'debian']
+        self.os_type = None
 
         self.distFolder = "/opt/dist"
-
         self.setup_properties_fn = "%s/setup.properties" % self.install_dir
         self.log = '%s/setup.log' % self.install_dir
         self.logError = '%s/setup_error.log' % self.install_dir
@@ -77,18 +98,6 @@ class Setup(object):
         self.idpTempMetadataFolder = "/opt/idp/temp_metadata"
         self.idpWarFolder = "/opt/idp/war"
 
-        self.downloadWars = False
-        self.modifyNetworking = False
-        self.configureSaml = False
-
-        self.oxtrust_war = 'https://ox.gluu.org/maven/org/xdi/oxtrust-server/%s/oxtrust-server-%s.war' % (self.oxVersion, self.oxVersion)
-        self.oxauth_war = 'https://ox.gluu.org/maven/org/xdi/oxauth-server/%s/oxauth-server-%s.war' % (self.oxVersion, self.oxVersion)
-        self.idp_war = 'http://ox.gluu.org/maven/org/xdi/oxidp/%s/oxidp-%s.war' % (self.oxVersion, self.oxVersion)
-        self.ce_setup_zip = 'https://github.com/GluuFederation/community-edition-setup/archive/%s.zip' % self.githubBranchName
-
-        self.os_types = ['centos', 'redhat', 'fedora', 'ubuntu', 'debian']
-        self.os_type = None
-
         self.hostname = None
         self.ip = None
         self.orgName = None
@@ -97,7 +106,6 @@ class Setup(object):
         self.city = None
         self.state = None
         self.admin_email = None
-
         self.encoded_ox_ldap_pw = None
         self.encoded_ldap_pw = None
         self.oxauthClient_encoded_pw = None
@@ -232,11 +240,12 @@ class Setup(object):
                      self.asimba_configuration: False,
                      self.asimba_selector_configuration: True
                      }
-                     
 
     def __repr__(self):
-        s = 'hostname'.ljust(30) + self.hostname.rjust(35) + "\n" \
-            + 'ip'.ljust(30) + self.ip.rjust(35) + "\n" \
+        s = ""
+        if self.components['httpd']['enabled'] | self.modifyNetworking:
+            s += 'ip'.ljust(30) + self.ip.rjust(35) + "\n"
+        s += 'hostname'.ljust(30) + self.hostname.rjust(35) + "\n" \
             + 'orgName'.ljust(30) + self.orgName.rjust(35) + "\n" \
             + 'os'.ljust(30) + self.os_type.rjust(35) + "\n" \
             + 'city'.ljust(30) + self.city.rjust(35) + "\n" \
@@ -246,73 +255,51 @@ class Setup(object):
             + 'tomcat max ram'.ljust(30) + self.tomcat_max_ram.rjust(35) + "\n" \
             + 'Admin Pass'.ljust(30) + self.ldapPass.rjust(35) + "\n" \
             + 'Modify Networking'.ljust(30) + `self.modifyNetworking`.rjust(35) + "\n"
-        if self.promptDownloadWars:
-            s += 'Download latest wars'.ljust(30) + `self.downloadWars`.rjust(35) + "\n"
+        if self.components['oxauth']['enabled']:
+            s += 'Install oxAuth'.ljust(30) + `self.components['oxauth']['enabled']`.rjust(35) + "\n"
+        if self.components['oxtrust']['enabled']:
+            s += 'Install oxTrust'.ljust(30) + `self.components['oxtrust']['enabled']`.rjust(35) + "\n"
+        if self.components['ldap']['enabled']:
+            s += 'Install LDAP'.ljust(30) + `self.components['ldap']['enabled']`.rjust(35) + "\n"
+        if self.components['httpd']['enabled']:
+            s += 'Install Apache 2 web server'.ljust(30) + `self.components['httpd']['enabled']`.rjust(35) + "\n"
+        if self.components['saml']['enabled']:
+            s += 'Configure SAML'.ljust(30) + `self.components['saml']['enabled']`.rjust(35) + "\n"
+        if self.components['asimba']['enabled']:
+            s += 'Configure Asimba'.ljust(30) + `self.components['asimba']['enabled']`.rjust(35) + "\n"
+        if self.components['cas']['enabled']:
+            s += 'Configure CAS'.ljust(30) + `self.components['cas']['enabled']`.rjust(35) + "\n"
+        if self.downloadWars:
+            s += 'Download latest development WAR files'.ljust(30) + `self.downloadWars`.rjust(35) + "\n"
         return s
 
-    def logIt(self, msg, errorLog=False):
-        if errorLog:
-            f = open(self.logError, 'a')
-            f.write('%s %s\n' % (time.strftime('%X %x'), msg))
-            f.close()
-        f = open(self.log, 'a')
-        f.write('%s %s\n' % (time.strftime('%X %x'), msg))
-        f.close()
-
-    # args = command + args, i.e. ['ls', '-ltr']
-    def run(self, args, cwd=None):
-        self.logIt('Running: %s' % ' '.join(args))
+    def add_ldap_schema(self):
         try:
-            p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd)
-            output, err = p.communicate()
-            if output:
-                self.logIt(output)
-            if err:
-                self.logIt(err, True)
+            self.logIt("Copying LDAP schema")
+            for schemaFile in self.schemaFiles:
+                self.copyFile(schemaFile, self.schemaFolder)
+            self.run(['chown', '-R', 'ldap:ldap', self.ldapBaseFolder])
         except:
-            self.logIt("Error running command : %s" % " ".join(args), True)
+            self.logIt("Error adding schema")
             self.logIt(traceback.format_exc(), True)
 
-    def getQuad(self):
-        return str(uuid.uuid4())[:4].upper()
+    def change_ownership(self):
+        self.logIt("Changing ownership")
+        realTomcatFolder = os.path.realpath(self.tomcatHome)
+        realLdapBaseFolder = os.path.realpath(self.ldapBaseFolder)
 
-    def isIP(self, address):
-        try:
-            socket.inet_aton(address)
-            return True
-        except socket.error:
-            return False
+        self.run(['/bin/chown', '-R', 'tomcat:tomcat', realTomcatFolder])
+        self.run(['/bin/chown', '-R', 'ldap:ldap', realLdapBaseFolder])
+        self.run(['/bin/chown', '-R', 'tomcat:tomcat', self.oxBaseDataFolder])
 
-    def getPW(self, size=12, chars=string.ascii_uppercase + string.digits + string.lowercase):
-        return ''.join(random.choice(chars) for _ in range(size))
+    def change_permissions(self):
+        realCertFolder = os.path.realpath(self.certFolder)
+        realTomcatWebappsFolder = os.path.realpath("%s/webapps" % self.tomcatHome)
 
-    def load_properties(self, fn):
-        self.logIt('Loading Properties %s' % fn)
-        p = Properties.Properties()
-        try:
-            p.load(open(fn))
-            properties_list = p.keys()
-            for prop in properties_list:
-                try:
-                    self.__dict__[prop] = p[prop]
-                except:
-                    self.logIt("Error loading property %s" % prop)
-                    installObject.logIt(traceback.format_exc(), True)
-        except:
-            self.logIt("Error loading properties", True)
-            self.logIt(traceback.format_exc(), True)
+        self.run(['/bin/chmod', 'a-x', realCertFolder])
+        self.run(['/bin/chmod', '-R', 'u+X', realCertFolder])
 
-    def load_json(self, fn):
-        self.logIt('Loading JSON from %s' % fn)
-        try:
-            json_file = open(fn)
-            json_text = json_file.read()
-            json_file.close()
-            return json.loads(json_text)
-        except:
-            self.logIt("Unable to read or parse json file from %s" % fn, True)
-            self.logIt(traceback.format_exc(), True)
-        return None
+        self.run(['/bin/chmod', '-R', '644', "%s/*" % realTomcatWebappsFolder])
 
     def check_properties(self):
         self.logIt('Checking properties')
@@ -360,37 +347,220 @@ class Setup(object):
         if not self.baseInum:
             self.baseInum = '@!%s.%s.%s.%s' % tuple([self.getQuad() for i in xrange(4)])
         if not self.inumOrg:
-            twoQuads = '%s.%s' % tuple([self.getQuad() for i in xrange(2)])
-            self.inumOrg = '%s!0001!%s' % (self.baseInum, twoQuads)
+            orgTwoQuads = '%s.%s' % tuple([self.getQuad() for i in xrange(2)])
+            self.inumOrg = '%s!0001!%s' % (self.baseInum, orgTwoQuads)
         if not self.inumAppliance:
-            twoQuads = '%s.%s' % tuple([self.getQuad() for i in xrange(2)])
-            self.inumAppliance = '%s!0002!%s' % (self.baseInum, twoQuads)
+            applianceTwoQuads = '%s.%s' % tuple([self.getQuad() for i in xrange(2)])
+            self.inumAppliance = '%s!0002!%s' % (self.baseInum, applianceTwoQuads)
         if not self.oxauth_client_id:
-            self.oxauth_client_id = '%s!0008!%s' % (self.baseInum, twoQuads)
+            clientTwoQuads = '%s.%s' % tuple([self.getQuad() for i in xrange(2)])
+            self.oxauth_client_id = '%s!0008!%s' % (self.baseInum, clientTwoQuads)
         if not self.inumApplianceFN:
             self.inumApplianceFN = self.inumAppliance.replace('@', '').replace('!', '').replace('.', '')
         if not self.inumOrgFN:
             self.inumOrgFN = self.inumOrg.replace('@', '').replace('!', '').replace('.', '')
 
-    def save_properties(self):
-        self.logIt('Saving properties to %s' % self.savedProperties)
-        def getString(object):
-            if type(object) == type(""):
-                return object.strip()
-            else:
-                return ''
+    def detect_OS_type(self):
+        # TODO Change this to support more distros. For example according to
+        # http://unix.stackexchange.com/questions/6345/how-can-i-get-distribution-name-and-version-number-in-a-simple-shell-script
+        distro_info = self.file_get_contents('/etc/redhat-release')
+        if 'CentOS' in distro_info:
+            return self.os_types[0]
+        else:
+            return installObject.choose_from_list(self.os_types, "Operating System")
+
+    def file_get_contents(self, filename):
+        with open(filename) as f:
+            return f.read()
+
+    def choose_from_list(self, list_of_choices, choice_name="item", default_choice_index=0):
+        return_value = None
+        choice_map = {}
+        chosen_index = 0
+        print "\nSelect the number for the %s from the following list:" % choice_name
+        for choice in list_of_choices:
+            choice_map[chosen_index] = choice
+            chosen_index += 1
+            print "  [%i]   %s" % (chosen_index, choice)
+        while not return_value:
+            choice_number = self.getPrompt("Please select a number listed above", str(default_choice_index + 1))
+            try:
+                choice_number = int(choice_number) - 1
+                if (choice_number >= 0) & (choice_number < len(list_of_choices)):
+                    return_value = choice_map[choice_number]
+                else:
+                    print '"%i" is not a valid choice' % (choice_number + 1)
+            except:
+                print 'Cannot convert "%s" to a number' % choice_number
+                self.logIt(traceback.format_exc(), True)
+        return return_value
+
+    def configure_httpd(self):
+        if self.os_type in ['centos', 'redhat', 'fedora']:
+            self.copyFile(self.apache2_conf, '/etc/httpd/conf/httpd.conf')
+            self.copyFile(self.apache2_ssl_conf, '/etc/httpd/conf.d/https_gluu.conf')
+        if self.os_type in ['debian', 'ubuntu']:
+            self.copyFile(self.apache2_ssl_conf, '/etc/apache2/sites-available/https_gluu.conf')
+            self.run(['ln', '-s', '/etc/apache2/sites-available/https_gluu.conf',
+                      '/etc/apache2/sites-enabled/https_gluu.conf'])
+
+    def configure_opendj(self):
         try:
-            p = Properties.Properties()
-            keys = self.__dict__.keys()
-            keys.sort()
-            for key in keys:
-                value = getString(self.__dict__[key])
-                if value != '':
-                    p[key] = value
-            p.store(open(self.savedProperties, 'w'))
+            self.logIt("Making LDAP configuration changes")
+            config_changes = [['set-global-configuration-prop', '--set', 'single-structural-objectclass-behavior:accept'],
+                              ['set-attribute-syntax-prop', '--syntax-name', '"Directory String"',   '--set', 'allow-zero-length-values:true'],
+                              ['set-password-policy-prop', '--policy-name', '"Default Password Policy"', '--set', 'allow-pre-encoded-passwords:true'],
+                              ['set-log-publisher-prop', '--publisher-name', '"File-Based Audit Logger"', '--set', 'enabled:true'],
+                              ['create-backend', '--backend-name', 'site', '--set', 'base-dn:o=site', '--type local-db', '--set', 'enabled:true']]
+            for changes in config_changes:
+                dsconfigCmd = " ".join(['cd %s/bin ; ' % self.ldapBaseFolder,
+                                        self.ldapDsconfigCommand,
+                                        '--trustAll',
+                                        '--no-prompt',
+                                        '--hostname',
+                                        'localhost',
+                                        '--port',
+                                        '4444',
+                                        '--bindDN',
+                                        '"%s"' % self.ldap_binddn,
+                                        '--bindPasswordFile',
+                                        self.ldapPassFn] + changes)
+                self.run(['/bin/su',
+                          'ldap',
+                          '-c',
+                          dsconfigCmd])
         except:
-            self.logIt("Error saving properties", True)
+            self.logIt("Error executing config changes", True)
             self.logIt(traceback.format_exc(), True)
+
+    def copyFile(self, inFile, destFolder):
+        try:
+            shutil.copy(inFile, destFolder)
+            self.logIt("Copied %s to %s" % (inFile, destFolder))
+        except:
+            self.logIt("Error copying %s to %s" % (inFile, destFolder), True)
+            self.logIt(traceback.format_exc(), True)
+
+    def copy_output(self):
+        self.logIt("Copying rendered templates to final destination")
+
+        # Detect sevice path and apache service name
+        service_path = '/sbin/service'
+        apache_service_name = 'httpd'
+        if self.os_type in ['debian', 'ubuntu']:
+            service_path = '/usr/sbin/service'
+            apache_service_name = 'apache2'
+
+        self.run([service_path, apache_service_name, 'stop'])
+        for dest_fn in self.ce_templates.keys():
+            if self.ce_templates[dest_fn]:
+                fn = os.path.split(dest_fn)[-1]
+                output_fn = os.path.join(self.outputFolder, fn)
+                try:
+                    self.logIt("Copying %s to %s" % (output_fn, dest_fn))
+                    shutil.copyfile(output_fn, dest_fn)
+                except:
+                    self.logIt("Error writing %s to %s" % (output_fn, dest_fn), True)
+                    self.logIt(traceback.format_exc(), True)
+        self.copyFile(self.oxauth_error_json, "%s/conf" % self.tomcatHome)
+
+        self.run([service_path, apache_service_name, 'start'])
+
+    def copy_scripts(self):
+        self.logIt("Copying script files")
+        for script in self.gluuScriptFiles:
+            self.copyFile(script, self.gluuOptBinFolder)
+        self.logIt("Rendering encode.py")
+        try:
+            f = open('%s/encode.py' % self.templateFolder)
+            encode_script = f.read()
+            f.close()
+            f = open("%s/encode.py" % self.gluuOptBinFolder, 'w')
+            f.write(encode_script % self.__dict__)
+            f.close()
+        except:
+            self.logIt("Error rendering encode script")
+            self.logIt(traceback.format_exc(), True)
+        self.run(["chmod", '-R', '700', self.gluuOptBinFolder])
+
+    def copy_static(self):
+        self.copyFile("%s/static/oxauth/oxauth-id-gen.py" % self.install_dir, "%s/conf" % self.tomcatHome)
+        self.copyFile("%s/static/tomcat/server.xml" % self.install_dir, "%s/conf" % self.tomcatHome)
+
+        self.createDirs("%s/conf/template/conf" % self.tomcatHome)
+        self.copyFile("%s/static/oxtrust/oxTrustCacheRefresh-template.properties.vm" % self.install_dir, "%s/conf/template/conf" % self.tomcatHome)
+
+    def createDirs(self, name):
+        try:
+            if not os.path.exists(name):
+                os.makedirs(name, 0600)
+                self.logIt('Created dir: %s' % name)
+        except:
+            self.logIt("Error making directory %s" % name, True)
+            self.logIt(traceback.format_exc(), True)
+
+    def deleteLdapPw(self):
+        try:
+            os.remove(self.ldapPassFn)
+            os.remove(os.path.join(self.ldapBaseFolder, 'opendj-setup.properties'))
+        except:
+            self.logIt("Error deleting ldap pw. Make sure %s is deleted" % self.ldapPassFn)
+            self.logIt(traceback.format_exc(), True)
+
+    def downloadWarFiles(self):
+        if self.downloadWars:
+            print "Downloading latest oxAuth war file..."
+            self.run(['/usr/bin/wget', self.oxauth_war, '-O', '%s/oxauth.war' % self.tomcatWebAppFolder])
+            print "Downloading latest oxTrust war file..."
+            self.run(['/usr/bin/wget', self.oxtrust_war, '-O', '%s/identity.war' % self.tomcatWebAppFolder])
+            print "Downloading latest Shibboleth IDP war file..."
+            self.run(['/usr/bin/wget', self.idp_war, '-O', '%s/idp.war' % self.idpWarFolder])
+            print "Downloading latest Asimba war file..."
+            self.run(['/usr/bin/wget', self.asimba_war, '-O', '%s/idp.war' % self.tomcatWebAppFolder])
+            print "Finished downloading latest war files"
+
+    def encode_passwords(self):
+        self.logIt("Encoding passwords")
+        try:
+            self.encoded_ldap_pw = self.ldap_encode(self.ldapPass)
+            cmd = "%s %s" % (self.oxEncodePWCommand, self.ldapPass)
+            self.encoded_ox_ldap_pw = os.popen(cmd, 'r').read().strip()
+            self.oxauthClient_pw = self.getPW()
+            cmd = "%s %s" % (self.oxEncodePWCommand, self.oxauthClient_pw)
+            self.oxauthClient_encoded_pw = os.popen(cmd, 'r').read().strip()
+        except:
+            self.logIt("Error encoding passwords", True)
+            self.logIt(traceback.format_exc(), True)
+
+    def export_opendj_public_cert(self):
+        # Load password to acces OpenDJ truststore
+        self.logIt("Reding OpenDJ truststore")
+
+        openDjPinFn = '%s/config/keystore.pin' % self.ldapBaseFolder
+        openDjTruststoreFn = '%s/config/truststore' % self.ldapBaseFolder
+
+        openDjPin = None
+        try:
+            f = open(openDjPinFn)
+            openDjPin = f.read().splitlines()[0]
+            f.close()
+        except:
+            self.logIt("Error reding OpenDJ truststore", True)
+            self.logIt(traceback.format_exc(), True)
+
+        # Export public OpenDJ certificate
+        self.logIt("Exporting OpenDJ certificate")
+        self.run([self.keytoolCommand,
+                  '-exportcert',
+                  '-keystore',
+                  openDjTruststoreFn,
+                  '-storepass',
+                  openDjPin,
+                  '-file',
+                  self.openDjCertFn,
+                  '-alias',
+                  'server-cert',
+                  '-rfc'])
 
     def gen_cert(self, suffix, password, user='root'):
         self.logIt('Generating Certificate for %s' % suffix)
@@ -443,7 +613,35 @@ class Setup(object):
         self.run(["/bin/chown", '%s:%s' % (user, user), key])
         self.run(["/bin/chmod", '700', key])
 
-        self.run(["/usr/bin/keytool", "-import", "-trustcacerts", "-alias", self.hostname, "-file", public_certificate, "-keystore", "/usr/java/latest/lib/security/cacerts", "-storepass", "changeit", "-noprompt"])
+        self.run(["/usr/bin/keytool", "-import", "-trustcacerts", "-alias", self.hostname, \
+                  "-file", public_certificate, "-keystore", "/usr/java/latest/lib/security/cacerts", \
+                  "-storepass", "changeit", "-noprompt"])
+
+    def gen_crypto(self):
+        try:
+            self.logIt('Generating certificates and keystores')
+            self.gen_cert('httpd', self.httpdKeyPass, 'apache')
+            self.gen_cert('shibIDP', self.shibJksPass, 'tomcat')
+            self.gen_cert('asimba', self.asimbaJksPass, 'tomcat')
+            # Shibboleth IDP and Asimba will be added soon...
+            self.gen_keystore('shibIDP',
+                              self.shibJksFn,
+                              self.shibJksPass,
+                              '%s/shibIDP.key' % self.certFolder,
+                              '%s/shibIDP.crt' % self.certFolder,
+                              'tomcat')
+            self.gen_keystore('asimba',
+                              self.asimbaJksFn,
+                              self.asimbaJksPass,
+                              '%s/asimba.key' % self.certFolder,
+                              '%s/asimba.crt' % self.certFolder,
+                              'tomcat')
+            self.gen_openid_keys()
+            self.run(['/bin/chown', '-R', 'tomcat:tomcat', self.certFolder])
+            self.run(['/bin/chmod', '-R', '500', self.certFolder])
+        except:
+            self.logIt("Error generating cyrpto")
+            self.logIt(traceback.format_exc(), True)
 
     def gen_keystore(self, suffix, keystoreFN, keystorePW, inKey, inCert, user='root'):
         self.logIt("Creating keystore %s" % suffix)
@@ -532,218 +730,31 @@ class Setup(object):
             self.logIt("Error running command : %s" % " ".join(args), True)
             self.logIt(traceback.format_exc(), True)
 
-    def gen_crypto(self):
+    def getPrompt(self, prompt, defaultValue=None):
         try:
-            self.logIt('Generating certificates and keystores')
-            self.gen_cert('httpd', self.httpdKeyPass, 'apache')
-            self.gen_cert('shibIDP', self.shibJksPass, 'tomcat')
-            self.gen_cert('asimba', self.asimbaJksPass, 'tomcat')
-            # Shibboleth IDP and Asimba will be added soon...
-            self.gen_keystore('shibIDP',
-                              self.shibJksFn,
-                              self.shibJksPass,
-                              '%s/shibIDP.key' % self.certFolder,
-                              '%s/shibIDP.crt' % self.certFolder,
-                              'tomcat')
-            self.gen_keystore('asimba',
-                              self.asimbaJksFn,
-                              self.asimbaJksPass,
-                              '%s/asimba.key' % self.certFolder,
-                              '%s/asimba.crt' % self.certFolder,
-                              'tomcat')
-            self.gen_openid_keys()
-            self.run(['/bin/chown', '-R', 'tomcat:tomcat', self.certFolder])
-            self.run(['/bin/chmod', '-R', '500', self.certFolder])
-        except:
-            self.logIt("Error generating cyrpto")
-            self.logIt(traceback.format_exc(), True)
-
-    def configure_httpd(self):
-        if self.os_type in ['centos', 'redhat', 'fedora']:
-            self.copyFile(self.apache2_conf, '/etc/httpd/conf/httpd.conf')
-            self.copyFile(self.apache2_ssl_conf, '/etc/httpd/conf.d/https_gluu.conf')
-        if self.os_type in ['debian', 'ubuntu']:
-            self.copyFile(self.apache2_ssl_conf, '/etc/apache2/sites-available/https_gluu.conf')
-            self.run(['ln', '-s', '/etc/apache2/sites-available/https_gluu.conf',
-                      '/etc/apache2/sites-enabled/https_gluu.conf'])
-
-    def copyFile(self, inFile, destFolder):
-        try:
-            shutil.copy(inFile, destFolder)
-            self.logIt("Copied %s to %s" % (inFile, destFolder))
-        except:
-            self.logIt("Error copying %s to %s" % (inFile, destFolder), True)
-            self.logIt(traceback.format_exc(), True)
-
-    def removeFile(self, fileName):
-        try:
-            if os.path.exists(fileName):
-                os.remove(fileName)
-                self.logIt('Removed file: %s' % fileName)
-        except:
-            self.logIt("Error removing file %s" % fileName, True)
-            self.logIt(traceback.format_exc(), True)
-
-    def createDirs(self, name):
-        try:
-            if not os.path.exists(name):
-                os.makedirs(name, 0600)
-                self.logIt('Created dir: %s' % name)
-        except:
-            self.logIt("Error making directory %s" % name, True)
-            self.logIt(traceback.format_exc(), True)
-
-    def removeDirs(self, name):
-        try:
-            if os.path.exists(name):
-                shutil.rmtree(name)
-                self.logIt('Removed dir: %s' % name)
-        except:
-            self.logIt("Error removing directory %s" % name, True)
-            self.logIt(traceback.format_exc(), True)
-
-    def add_ldap_schema(self):
-        try:
-            self.logIt("Copying LDAP schema")
-            for schemaFile in self.schemaFiles:
-                self.copyFile(schemaFile, self.schemaFolder)
-            self.run(['chown', '-R', 'ldap:ldap', self.ldapBaseFolder])
-        except:
-            self.logIt("Error adding schema")
-            self.logIt(traceback.format_exc(), True)
-
-    def ldap_encode(self, password):
-        salt = os.urandom(4)
-        sha = hashlib.sha1(password)
-        sha.update(salt)
-        b64encoded = '{0}{1}'.format(sha.digest(), salt).encode('base64').strip()
-        encrypted_password = '{{SSHA}}{0}'.format(b64encoded)
-        return encrypted_password
-
-    def encode_passwords(self):
-        self.logIt("Encoding passwords")
-        try:
-            self.encoded_ldap_pw = self.ldap_encode(self.ldapPass)
-            cmd = "%s %s" % (self.oxEncodePWCommand, self.ldapPass)
-            self.encoded_ox_ldap_pw = os.popen(cmd, 'r').read().strip()
-            self.oxauthClient_pw = self.getPW()
-            cmd = "%s %s" % (self.oxEncodePWCommand, self.oxauthClient_pw)
-            self.oxauthClient_encoded_pw = os.popen(cmd, 'r').read().strip()
-        except:
-            self.logIt("Error encoding passwords", True)
-            self.logIt(traceback.format_exc(), True)
-
-    def setup_opendj(self):
-        self.logIt("Running OpenDJ Setup")
-        try:
-            self.add_ldap_schema()
-        except:
-            self.logIt('Error adding ldap schema', True)
-            self.logIt(traceback.format_exc(), True)
-
-        # Copy opendj-setup.properties so user ldap can find it in /opt/opendj
-        setupPropsFN = os.path.join(self.ldapBaseFolder, 'opendj-setup.properties')
-        shutil.copy("%s/opendj-setup.properties" % self.outputFolder, setupPropsFN)
-        self.change_ownership()
-        try:
-            setupCmd = "cd /opt/opendj ; " + " ".join([self.ldapSetupCommand,
-                                      '--no-prompt',
-                                      '--cli',
-                                      '--propertiesFilePath',
-                                      setupPropsFN,
-                                      '--acceptLicense'])
-            self.run(['/bin/su',
-                      'ldap',
-                      '-c',
-                      setupCmd])
-        except:
-            self.logIt("Error running LDAP setup script", True)
-            self.logIt(traceback.format_exc(), True)
-
-        try:
-            dsjavaCmd = "cd /opt/opendj/bin ; %s" % self.ldapDsJavaPropCommand
-            self.run(['/bin/su',
-                      'ldap',
-                      '-c',
-                      dsjavaCmd
-            ])
-        except:
-            self.logIt("Error running dsjavaproperties", True)
-            self.logIt(traceback.format_exc(), True)
-
-    def configure_opendj(self):
-        try:
-            self.logIt("Making LDAP configuration changes")
-            config_changes = [['set-global-configuration-prop', '--set', 'single-structural-objectclass-behavior:accept'],
-                              ['set-attribute-syntax-prop', '--syntax-name', '"Directory String"',   '--set', 'allow-zero-length-values:true'],
-                              ['set-password-policy-prop', '--policy-name', '"Default Password Policy"', '--set', 'allow-pre-encoded-passwords:true'],
-                              ['set-log-publisher-prop', '--publisher-name', '"File-Based Audit Logger"', '--set', 'enabled:true'],
-                              ['create-backend', '--backend-name', 'site', '--set', 'base-dn:o=site', '--type local-db', '--set', 'enabled:true']]
-            for changes in config_changes:
-                dsconfigCmd = " ".join(['cd %s/bin ; ' % self.ldapBaseFolder,
-                                         self.ldapDsconfigCommand,
-                                         '--trustAll',
-                                         '--no-prompt',
-                                         '--hostname',
-                                         'localhost',
-                                         '--port',
-                                         '4444',
-                                         '--bindDN',
-                                         '"%s"' % self.ldap_binddn,
-                                         '--bindPasswordFile',
-                                         self.ldapPassFn] + changes)
-                self.run(['/bin/su',
-                         'ldap',
-                         '-c',
-                         dsconfigCmd])
-        except:
-            self.logIt("Error executing config changes", True)
-            self.logIt(traceback.format_exc(), True)
-
-    def index_opendj(self):
-        try:
-            self.logIt("Running LDAP index creation commands")
-            # This json file contains a mapping of the required indexes.
-            # [ { "attribute": "inum", "type": "string", "index": ["equality"] }, ...}
-            index_json = self.load_json(self.indexJson)
-            if index_json:
-                for attrDict in index_json:
-                    attr_name = attrDict['attribute']
-                    index_types = attrDict['index']
-                    for index_type in index_types:
-                        self.logIt("Creating %s index for attribute %s" % (index_type, attr_name))
-                        indexCmd = " ".join(['cd %s/bin ; ' % self.ldapBaseFolder,
-                                            self.ldapDsconfigCommand,
-                                            'create-local-db-index',
-                                            '--backend-name',
-                                            'userRoot',
-                                            '--type',
-                                            'generic',
-                                            '--index-name',
-                                            attr_name,
-                                            '--set',
-                                            'index-type:%s' % index_type,
-                                            '--set',
-                                            'index-entry-limit:4000',
-                                            '--hostName',
-                                            'localhost',
-                                            '--port',
-                                            '4444',
-                                            '--bindDN',
-                                            '"%s"' % self.ldap_binddn,
-                                            '-j', self.ldapPassFn,
-                                            '--trustAll',
-                                            '--noPropertiesFile',
-                                            '--no-prompt'])
-                        self.run(['/bin/su',
-                          'ldap',
-                          '-c',
-                          indexCmd])
+            if defaultValue:
+                user_input = raw_input("%s [%s] : " % (prompt, defaultValue)).strip()
+                if user_input == '':
+                    return defaultValue
+                else:
+                    return user_input
             else:
-                self.logIt('NO indexes found %s' % self.indexJson, True)
+                input = False
+                while not input:
+                    user_input = raw_input("%s : " % prompt).strip()
+                    if user_input != '':
+                        input = True
+                        return user_input
+        except KeyboardInterrupt:
+            sys.exit()
         except:
-            self.logIt("Error occured during LDAP indexing", True)
-            self.logIt(traceback.format_exc(), True)
+            return None
+
+    def getPW(self, size=12, chars=string.ascii_uppercase + string.digits + string.lowercase):
+        return ''.join(random.choice(chars) for _ in range(size))
+
+    def getQuad(self):
+        return str(uuid.uuid4())[:4].upper()
 
     def import_ldif(self):
         self.logIt("Importing userRoot LDIF data")
@@ -800,7 +811,340 @@ class Setup(object):
                   '-c',
                   '%s' % importCmd])
 
-    ### Change hostname in the relevant files
+    def index_opendj(self):
+        try:
+            self.logIt("Running LDAP index creation commands")
+            # This json file contains a mapping of the required indexes.
+            # [ { "attribute": "inum", "type": "string", "index": ["equality"] }, ...}
+            index_json = self.load_json(self.indexJson)
+            if index_json:
+                for attrDict in index_json:
+                    attr_name = attrDict['attribute']
+                    index_types = attrDict['index']
+                    for index_type in index_types:
+                        self.logIt("Creating %s index for attribute %s" % (index_type, attr_name))
+                        indexCmd = " ".join(['cd %s/bin ; ' % self.ldapBaseFolder,
+                                             self.ldapDsconfigCommand,
+                                             'create-local-db-index',
+                                             '--backend-name',
+                                             'userRoot',
+                                             '--type',
+                                             'generic',
+                                             '--index-name',
+                                             attr_name,
+                                             '--set',
+                                             'index-type:%s' % index_type,
+                                             '--set',
+                                             'index-entry-limit:4000',
+                                             '--hostName',
+                                             'localhost',
+                                             '--port',
+                                             '4444',
+                                             '--bindDN',
+                                             '"%s"' % self.ldap_binddn,
+                                             '-j', self.ldapPassFn,
+                                             '--trustAll',
+                                             '--noPropertiesFile',
+                                             '--no-prompt'])
+                        self.run(['/bin/su',
+                                  'ldap',
+                                  '-c',
+                                  indexCmd])
+            else:
+                self.logIt('NO indexes found %s' % self.indexJson, True)
+        except:
+            self.logIt("Error occured during LDAP indexing", True)
+            self.logIt(traceback.format_exc(), True)
+
+    def install_asimba_war(self):
+        if self.components['asimba']['enabled']:
+            asimbaWar = 'oxasimba.war'
+            distAsimbaPath = '%s/%s' % (self.distFolder, asimbaWar)
+            tmpAsimbaDir = '%s/tmp_asimba' % self.distFolder
+
+            self.logIt("Unpacking %s..." % asimbaWar)
+            self.removeDirs(tmpAsimbaDir)
+            self.createDirs(tmpAsimbaDir)
+
+            self.run([self.jarCommand,
+                      'xf',
+                      distAsimbaPath], tmpAsimbaDir)
+
+            self.logIt("Configuring Asimba...")
+            asimbaTemplateConfigurationPath = '%s/asimba.xml' % self.outputFolder
+            asimbaWarConfigurationPath = '%s/WEB-INF/conf/asimba.xml' % tmpAsimbaDir
+
+            self.copyFile(asimbaTemplateConfigurationPath, asimbaWarConfigurationPath)
+
+            self.logIt("Generating asimba.war...")
+            self.run([self.jarCommand,
+                      'cmf',
+                      'tmp_asimba/META-INF/MANIFEST.MF',
+                      'asimba.war',
+                      '-C',
+                      '%s/' % tmpAsimbaDir ,
+                      '.'], self.distFolder)
+
+            self.logIt("Copying asimba.war into tomcat webapps folder...")
+            self.copyFile('%s/asimba.war' % self.distFolder, self.tomcatWebAppFolder)
+
+            self.removeDirs(tmpAsimbaDir)
+            self.removeFile('%s/asimba.war' % self.distFolder)
+
+    def install_cas_war(self):
+        if self.components['cas']['enabled']:
+            casWar = 'oxcas.war'
+            distCasPath = '%s/%s' % (self.distFolder, casWar)
+            tmpCasDir = '%s/tmp_cas' % self.distFolder
+
+            self.logIt("Unpacking %s..." % casWar)
+            self.removeDirs(tmpCasDir)
+            self.createDirs(tmpCasDir)
+
+            self.run([self.jarCommand,
+                      'xf',
+                      distCasPath], tmpCasDir)
+
+            self.logIt("Configuring CAS...")
+            casTemplatePropertiesPath = '%s/cas.properties' % self.outputFolder
+            casWarPropertiesPath = '%s/WEB-INF/cas.properties' % tmpCasDir
+
+            self.copyFile(casTemplatePropertiesPath, casWarPropertiesPath)
+
+            self.logIt("Generating cas.war...")
+            self.run([self.jarCommand,
+                      'cmf',
+                      'tmp_cas/META-INF/MANIFEST.MF',
+                      'cas.war',
+                      '-C',
+                      '%s/' % tmpCasDir,
+                      '.'], self.distFolder)
+
+            self.logIt("Copying cas.war into tomcat webapps folder...")
+            self.copyFile('%s/cas.war' % self.distFolder, self.tomcatWebAppFolder)
+
+            self.removeDirs(tmpCasDir)
+            self.removeFile('%s/cas.war' % self.distFolder)
+
+    def isIP(self, address):
+        try:
+            socket.inet_aton(address)
+            return True
+        except socket.error:
+            return False
+
+    def logIt(self, msg, errorLog=False):
+        if errorLog:
+            f = open(self.logError, 'a')
+            f.write('%s %s\n' % (time.strftime('%X %x'), msg))
+            f.close()
+        f = open(self.log, 'a')
+        f.write('%s %s\n' % (time.strftime('%X %x'), msg))
+        f.close()
+
+    def ldap_encode(self, password):
+        salt = os.urandom(4)
+        sha = hashlib.sha1(password)
+        sha.update(salt)
+        b64encoded = '{0}{1}'.format(sha.digest(), salt).encode('base64').strip()
+        encrypted_password = '{{SSHA}}{0}'.format(b64encoded)
+        return encrypted_password
+
+    def load_properties(self, fn):
+        self.logIt('Loading Properties %s' % fn)
+        p = Properties.Properties()
+        try:
+            p.load(open(fn))
+            properties_list = p.keys()
+            for prop in properties_list:
+                try:
+                    self.__dict__[prop] = p[prop]
+                except:
+                    self.logIt("Error loading property %s" % prop)
+                    installObject.logIt(traceback.format_exc(), True)
+        except:
+            self.logIt("Error loading properties", True)
+            self.logIt(traceback.format_exc(), True)
+
+    def load_json(self, fn):
+        self.logIt('Loading JSON from %s' % fn)
+        try:
+            json_file = open(fn)
+            json_text = json_file.read()
+            json_file.close()
+            return json.loads(json_text)
+        except:
+            self.logIt("Unable to read or parse json file from %s" % fn, True)
+            self.logIt(traceback.format_exc(), True)
+        return None
+
+    def makeFolders(self):
+        try:
+            # Create these folder on all instances
+            self.run(['bin/mkdir', '-p', self.configFolder])
+            self.run(['bin/mkdir', '-p', self.certFolder])
+
+            if self.components['oxtrust']['enabled'] | self.components['oxauth']['enabled']:
+                self.run(['/bin/mkir', '-p', self.gluuOptFolder])
+                self.run(['bin/mkdir', '-p', self.gluuOptBinFolder])
+                self.run(['bin/mkdir', '-p', self.tomcat_user_home_lib])
+                self.run(['bin/mkdir', '-p', self.oxPhotosFolder])
+                self.run(['bin/mkdir', '-p', self.oxTrustRemovedFolder])
+
+            if self.components['saml']['enabled']:
+                self.run(['bin/mkdir', '-p', self.idpFolder])
+                self.run(['bin/mkdir', '-p', self.idpMetadataFolder])
+                self.run(['bin/mkdir', '-p', self.idpLogsFolder])
+                self.run(['bin/mkdir', '-p', self.idpLibFolder])
+                self.run(['bin/mkdir', '-p', self.idpConfFolder])
+                self.run(['bin/mkdir', '-p', self.idpSslFolder])
+                self.run(['bin/mkdir', '-p', self.idpTempMetadataFolder])
+                self.run(['bin/mkdir', '-p', self.idpWarFolder])
+        except:
+            self.logIt("Error making folders", True)
+            self.logIt(traceback.format_exc(), True)
+
+    def make_salt(self):
+        try:
+            f = open("%s/conf/salt" % self.tomcatHome, 'w')
+            f.write('encodeSalt = %s' % self.encode_salt)
+            f.close()
+        except:
+            self.logIt("Error writing salt", True)
+            self.logIt(traceback.format_exc(), True)
+            sys.exit()
+
+    def modify_networking_prompt(self):
+        if self.modifyNetworking:
+            self.ce_templates[self.etc_hosts] = True
+            self.ce_templates[self.etc_hostname] = True
+
+    def promptForProperties(self):
+        # IP address needed only for Apache2 and hosts file update
+        if self.components['httpd']['enabled'] | self.modifyNetworking:
+            detectedIP = None
+            try:
+                testSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                detectedIP = [(testSocket.connect(('8.8.8.8', 80)),
+                               testSocket.getsockname()[0],
+                               testSocket.close()) for s in [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]
+            except:
+                installObject.logIt("No detected IP address", True)
+                self.logIt(traceback.format_exc(), True)
+            if detectedIP:
+                installObject.ip = installObject.getPrompt("Enter IP Address", detectedIP)
+            else:
+                installObject.ip = installObject.getPrompt("Enter IP Address")
+
+        detectedHostname = None
+        try:
+            detectedHostname = socket.gethostbyaddr(socket.gethostname())[0]
+        except:
+            try:
+                detectedHostname = os.popen("/bin/hostname").read().strip()
+            except:
+                installObject.logIt("No detected hostname", True)
+                self.logIt(traceback.format_exc(), True)
+        if detectedHostname:
+            installObject.hostname = installObject.getPrompt("Enter hostname", detectedHostname)
+        else:
+            installObject.hostname = installObject.getPrompt("Enter hostname")
+
+        # Get the OS type
+        installObject.os_type = installObject.detect_OS_type()
+
+        # Get city and state|province code
+        installObject.city = installObject.getPrompt("Enter your city or locality")
+        long_enough = False
+        while not long_enough:
+            state = installObject.getPrompt("Enter your state or province two letter code")
+            if len(state) != 2:
+                print "State or province code must be two characters"
+            else:
+                installObject.state = state
+                long_enough = True
+
+        # Get the Country Code
+        long_enough = False
+        while not long_enough:
+            countryCode = installObject.getPrompt("Enter two letter Country Code")
+            if len(countryCode) != 2:
+                print "Country code must be two characters"
+            else:
+                installObject.countryCode = countryCode
+                long_enough = True
+
+        installObject.orgName = installObject.getPrompt("Enter Organization Name")
+        installObject.admin_email = installObject.getPrompt('Enter email address for support at your organization')
+        installObject.tomcat_max_ram = installObject.getPrompt("Enter maximum RAM for tomcat in MB", '1536')
+        randomPW = installObject.getPW()
+        installObject.ldapPass = installObject.getPrompt("Optional: enter password for oxTrust and LDAP superuser", randomPW)
+        modifyNetworking = self.getPrompt("Update the hostname, hosts, and resolv.conf files?", "No")[0].lower()
+        if modifyNetworking == 'y':
+            installObject.modifyNetworking = True
+
+        promptForComponents = self.getPrompt("Select individual components?", "No")[0].lower()
+        if promptForComponents == 'y':
+            promptForOxAuth = self.getPrompt("Install oxAuth OAuth2 Authorization Server?", "Yes")[0].lower()
+            if promptForOxAuth == 'y':
+                installObject.components['oxauth']['enabled'] = True
+            else:
+                installObject.components['oxauth']['enabled'] = False
+
+            promptForOxTrust = self.getPrompt("Install oxTrust Admin UI?", "Yes")[0].lower()
+            if promptForOxTrust == 'y':
+                installObject.components['oxtrust']['enabled'] = True
+            else:
+                installObject.components['oxtrust']['enabled'] = False
+
+            promptForLDAP = self.getPrompt("Install Gluu OpenDJ LDAP Server?", "Yes")[0].lower()
+            if promptForLDAP == 'y':
+                installObject.components['ldap']['enabled'] = True
+            else:
+                installObject.components['ldap']['enabled'] = False
+
+            promptForHTTPD = self.getPrompt("Install Apache HTTPD Server", "Yes")[0].lower()
+            if promptForHTTPD == 'y':
+                installObject.components['httpd']['enabled'] = True
+            else:
+                installObject.components['httpd']['enabled'] = True
+
+            promptForShibIDP = self.getPrompt("Install Shibboleth SAML IDP?", "No")[0].lower()
+            if promptForShibIDP == 'y':
+                installObject.components['saml']['enabled'] = True
+            else:
+                installObject.components['saml']['enabled'] = True
+
+            promptForAsimba = self.getPrompt("Install Asimba SAML Proxy?", "No")[0].lower()
+            if promptForAsimba == 'y':
+                installObject.components['asimba']['enabled'] = True
+            else:
+                installObject.components['asimba']['enabled'] = True
+
+            promptForCAS = self.getPrompt("Install CAS?", "No")[0].lower()
+            if promptForCAS == 'y':
+                installObject.components['cas']['enabled'] = True
+            else:
+                installObject.components['cas']['enabled'] = True
+
+    def removeDirs(self, name):
+        try:
+            if os.path.exists(name):
+                shutil.rmtree(name)
+                self.logIt('Removed dir: %s' % name)
+        except:
+            self.logIt("Error removing directory %s" % name, True)
+            self.logIt(traceback.format_exc(), True)
+
+    def removeFile(self, fileName):
+        try:
+            if os.path.exists(fileName):
+                os.remove(fileName)
+                self.logIt('Removed file: %s' % fileName)
+        except:
+            self.logIt("Error removing file %s" % fileName, True)
+            self.logIt(traceback.format_exc(), True)
+
     def render_templates(self):
         self.logIt("Rendering templates")
         for fullPath in self.ce_templates.keys():
@@ -817,56 +1161,77 @@ class Setup(object):
                 self.logIt("Error writing template %s" % fullPath, True)
                 self.logIt(traceback.format_exc(), True)
 
-    ### Notify system about hostname update
-    def update_hostname(self):
-        self.logIt("Copying hosts and hostname to final destination")
-
-        self.copyFile("%s/hostname" % self.outputFolder, self.etc_hostname)
-        self.run(['/bin/hostname', self.hostname])
-
-        self.copyFile("%s/hosts" % self.outputFolder, self.etc_hosts)
-
-    def copy_output(self):
-        self.logIt("Copying rendered templates to final destination")
-
-        # Detect sevice path and apache service name
-        service_path = '/sbin/service'
-        apache_service_name = 'httpd'
-        if self.os_type in ['debian', 'ubuntu']:
-            service_path = '/usr/sbin/service'
-            apache_service_name = 'apache2'
-
-        self.run([service_path, apache_service_name, 'stop'])
-        for dest_fn in self.ce_templates.keys():
-            if self.ce_templates[dest_fn]:
-                fn = os.path.split(dest_fn)[-1]
-                output_fn = os.path.join(self.outputFolder, fn)
-                try:
-                    self.logIt("Copying %s to %s" % (output_fn, dest_fn))
-                    shutil.copyfile(output_fn, dest_fn)
-                except:
-                    self.logIt("Error writing %s to %s" % (output_fn, dest_fn), True)
-                    self.logIt(traceback.format_exc(), True)
-        self.copyFile(self.oxauth_error_json, "%s/conf" % self.tomcatHome)
-
-        self.run([service_path, apache_service_name, 'start'])
-
-    def copy_scripts(self):
-        self.logIt("Copying script files")
-        for script in self.gluuScriptFiles:
-            self.copyFile(script, self.gluuOptBinFolder)
-        self.logIt("Rendering encode.py")
+    # args = command + args, i.e. ['ls', '-ltr']
+    def run(self, args, cwd=None):
+        self.logIt('Running: %s' % ' '.join(args))
         try:
-            f = open('%s/encode.py' % self.templateFolder)
-            encode_script = f.read()
-            f.close()
-            f = open("%s/encode.py" % self.gluuOptBinFolder, 'w')
-            f.write(encode_script % self.__dict__)
-            f.close()
+            p = subprocess.Popen(args, stdout=subprocess.PIPE, stderr=subprocess.PIPE, cwd=cwd)
+            output, err = p.communicate()
+            if output:
+                self.logIt(output)
+            if err:
+                self.logIt(err, True)
         except:
-            self.logIt("Error rendering encode script")
+            self.logIt("Error running command : %s" % " ".join(args), True)
             self.logIt(traceback.format_exc(), True)
-        self.run(["chmod", '-R', '700', self.gluuOptBinFolder])
+
+    def save_properties(self):
+        self.logIt('Saving properties to %s' % self.savedProperties)
+        def getString(object):
+            if type(object) == type(""):
+                return object.strip()
+            else:
+                return ''
+        try:
+            p = Properties.Properties()
+            keys = self.__dict__.keys()
+            keys.sort()
+            for key in keys:
+                value = getString(self.__dict__[key])
+                if value != '':
+                    p[key] = value
+            p.store(open(self.savedProperties, 'w'))
+        except:
+            self.logIt("Error saving properties", True)
+            self.logIt(traceback.format_exc(), True)
+
+    def setup_opendj(self):
+        self.logIt("Running OpenDJ Setup")
+        try:
+            self.add_ldap_schema()
+        except:
+            self.logIt('Error adding ldap schema', True)
+            self.logIt(traceback.format_exc(), True)
+
+        # Copy opendj-setup.properties so user ldap can find it in /opt/opendj
+        setupPropsFN = os.path.join(self.ldapBaseFolder, 'opendj-setup.properties')
+        shutil.copy("%s/opendj-setup.properties" % self.outputFolder, setupPropsFN)
+        self.change_ownership()
+        try:
+            setupCmd = "cd /opt/opendj ; " + " ".join([self.ldapSetupCommand,
+                                      '--no-prompt',
+                                      '--cli',
+                                      '--propertiesFilePath',
+                                      setupPropsFN,
+                                      '--acceptLicense'])
+            self.run(['/bin/su',
+                      'ldap',
+                      '-c',
+                      setupCmd])
+        except:
+            self.logIt("Error running LDAP setup script", True)
+            self.logIt(traceback.format_exc(), True)
+
+        try:
+            dsjavaCmd = "cd /opt/opendj/bin ; %s" % self.ldapDsJavaPropCommand
+            self.run(['/bin/su',
+                      'ldap',
+                      '-c',
+                      dsjavaCmd
+            ])
+        except:
+            self.logIt("Error running dsjavaproperties", True)
+            self.logIt(traceback.format_exc(), True)
 
     def setup_init_scripts(self):
         for init_file in self.init_files:
@@ -912,50 +1277,13 @@ class Setup(object):
             self.logIt("Error starting tomcat")
             self.logIt(traceback.format_exc(), True)
 
-    def change_ownership(self):
-        self.logIt("Changing ownership")
-        realTomcatFolder = os.path.realpath(self.tomcatHome)
-        realLdapBaseFolder = os.path.realpath(self.ldapBaseFolder)
+    def update_hostname(self):
+        self.logIt("Copying hosts and hostname to final destination")
 
-        self.run(['/bin/chown', '-R', 'tomcat:tomcat', realTomcatFolder])
-        self.run(['/bin/chown', '-R', 'ldap:ldap', realLdapBaseFolder])
-        self.run(['/bin/chown', '-R', 'tomcat:tomcat', self.oxBaseDataFolder])
+        self.copyFile("%s/hostname" % self.outputFolder, self.etc_hostname)
+        self.run(['/bin/hostname', self.hostname])
 
-    def change_permissions(self):
-        realCertFolder = os.path.realpath(self.certFolder)
-        realTomcatWebappsFolder = os.path.realpath("%s/webapps" % self.tomcatHome)
-
-        self.run(['/bin/chmod', 'a-x', realCertFolder])
-        self.run(['/bin/chmod', '-R', 'u+X', realCertFolder])
-
-        self.run(['/bin/chmod', '-R', '644', "%s/*" % realTomcatWebappsFolder])
-
-    def copy_static(self):
-        self.copyFile("%s/static/oxauth/oxauth-id-gen.py" % self.install_dir, "%s/conf" % self.tomcatHome)
-        self.copyFile("%s/static/tomcat/server.xml" % self.install_dir, "%s/conf" % self.tomcatHome)
-
-        self.createDirs("%s/conf/template/conf" % self.tomcatHome)
-        self.copyFile("%s/static/oxtrust/oxTrustCacheRefresh-template.properties.vm" % self.install_dir, "%s/conf/template/conf" % self.tomcatHome)
-
-    def getPrompt(self, prompt, defaultValue=None):
-        try:
-            if defaultValue:
-                user_input = raw_input("%s [%s] : " % (prompt, defaultValue)).strip()
-                if user_input == '':
-                    return defaultValue
-                else:
-                    return user_input
-            else:
-                input = False
-                while not input:
-                    user_input = raw_input("%s : " % prompt).strip()
-                    if user_input != '':
-                        input = True
-                        return user_input
-        except KeyboardInterrupt:
-            sys.exit()
-        except:
-            return None
+        self.copyFile("%s/hosts" % self.outputFolder, self.etc_hosts)
 
     def writeLdapPW(self):
         try:
@@ -966,268 +1294,7 @@ class Setup(object):
         except:
             self.logIt("Error writing temporary LDAP password.")
 
-    def deleteLdapPw(self):
-        try:
-            os.remove(self.ldapPassFn)
-            os.remove(os.path.join(self.ldapBaseFolder, 'opendj-setup.properties'))
-        except:
-            self.logIt("Error deleting ldap pw. Make sure %s is deleted" % self.ldapPassFn)
-            self.logIt(traceback.format_exc(), True)
-
-    def makeFolders(self):
-        try:
-            if not os.path.exists(self.gluuOptFolder):
-                os.makedirs(self.gluuOptFolder)
-            if not os.path.exists(self.gluuOptBinFolder):
-                os.makedirs(self.gluuOptBinFolder)
-            if not os.path.exists(self.tomcat_user_home_lib):
-                os.makedirs(self.tomcat_user_home_lib)
-            if not os.path.exists(self.configFolder):
-                os.makedirs(self.configFolder)
-            if not os.path.exists(self.certFolder):
-                os.makedirs(self.certFolder)
-            if not os.path.exists(self.oxPhotosFolder):
-                os.makedirs(self.oxPhotosFolder)
-            if not os.path.exists(self.oxTrustRemovedFolder):
-                os.makedirs(self.oxTrustRemovedFolder)
-            if self.configureSaml:
-                if not os.path.exists(self.idpFolder):
-                    os.makedirs(self.idpFolder)
-                if not os.path.exists(self.idpMetadataFolder):
-                    os.makedirs(self.idpMetadataFolder)
-                if not os.path.exists(self.idpLogsFolder):
-                    os.makedirs(self.idpLogsFolder)
-                if not os.path.exists(self.idpLibFolder):
-                    os.makedirs(self.idpLibFolder)
-                if not os.path.exists(self.idpConfFolder):
-                    os.makedirs(self.idpConfFolder)
-                if not os.path.exists(self.idpSslFolder):
-                    os.makedirs(self.idpSslFolder)
-                if not os.path.exists(self.idpTempMetadataFolder):
-                    os.makedirs(self.idpTempMetadataFolder)
-                if not os.path.exists(self.idpWarFolder):
-                    os.makedirs(self.idpWarFolder)
-        except:
-            self.logIt("Error making folders", True)
-            self.logIt(traceback.format_exc(), True)
-
-    def make_salt(self):
-        try:
-            f = open("%s/conf/salt" % self.tomcatHome, 'w')
-            f.write('encodeSalt = %s' % self.encode_salt)
-            f.close()
-        except:
-            self.logIt("Error writing salt", True)
-            self.logIt(traceback.format_exc(), True)
-            sys.exit()
-
-    def choose_from_list(self, list_of_choices, choice_name="item", default_choice_index=0):
-        return_value = None
-        choice_map = {}
-        chosen_index = 0
-        print "\nSelect the number for the %s from the following list:" % choice_name
-        for choice in list_of_choices:
-            choice_map[chosen_index] = choice
-            chosen_index += 1
-            print "  [%i]   %s" % (chosen_index, choice)
-        while not return_value:
-            choice_number = self.getPrompt("Please select a number listed above", str(default_choice_index + 1))
-            try:
-                choice_number = int(choice_number) - 1
-                if (choice_number >= 0) & (choice_number < len(list_of_choices)):
-                    return_value = choice_map[choice_number]
-                else:
-                    print '"%i" is not a valid choice' % (choice_number + 1)
-            except:
-                print 'Cannot convert "%s" to a number' % choice_number
-                self.logIt(traceback.format_exc(), True)
-        return return_value
-
-    def modify_netowrking_prompt(self):
-        if self.modifyNetworking:
-            self.ce_templates[self.etc_hosts] = True
-            self.ce_templates[self.etc_hostname] = True
-
-    def promptForProperties(self):
-        detectedIP = None
-        try:
-            testSocket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            detectedIP = [(testSocket.connect(('8.8.8.8', 80)),
-                           testSocket.getsockname()[0],
-                           testSocket.close()) for s in [socket.socket(socket.AF_INET, socket.SOCK_DGRAM)]][0][1]
-        except:
-            installObject.logIt("No detected IP address", True)
-            self.logIt(traceback.format_exc(), True)
-        if detectedIP:
-            installObject.ip = installObject.getPrompt("Enter IP Address", detectedIP)
-        else:
-            installObject.ip = installObject.getPrompt("Enter IP Address")
-        detectedHostname = None
-        try:
-            detectedHostname = socket.gethostbyaddr(socket.gethostname())[0]
-        except:
-            try:
-                detectedHostname = os.popen("/bin/hostname").read().strip()
-            except:
-                installObject.logIt("No detected hostname", True)
-                self.logIt(traceback.format_exc(), True)
-        if detectedHostname:
-            installObject.hostname = installObject.getPrompt("Enter hostname", detectedHostname)
-        else:
-            installObject.hostname = installObject.getPrompt("Enter hostname")
-
-        # Get the OS type
-        installObject.os_type = installObject.choose_from_list(installObject.os_types, "Operating System")
-
-        # Get city and state|province code
-        installObject.city = installObject.getPrompt("Enter your city or locality")
-        long_enough = False
-        while not long_enough:
-            state = installObject.getPrompt("Enter your state or province two letter code")
-            if len(state) != 2:
-                print "State or province code must be two characters"
-            else:
-                installObject.state = state
-                long_enough = True
-
-        # Get the Country Code
-        long_enough = False
-        while not long_enough:
-            countryCode = installObject.getPrompt("Enter two letter Country Code")
-            if len(countryCode) != 2:
-                print "Country code must be two characters"
-            else:
-                installObject.countryCode = countryCode
-                long_enough = True
-
-        installObject.orgName = installObject.getPrompt("Enter Organization Name")
-        installObject.admin_email = installObject.getPrompt("Enter email address for support at your organization")
-        installObject.tomcat_max_ram = installObject.getPrompt("Enter maximum RAM for tomcat in MB", '1536')
-        randomPW = installObject.getPW()
-        installObject.ldapPass = installObject.getPrompt("Optional: enter password for oxTrust and LDAP superuser", randomPW)
-        modifyNetworking = self.getPrompt("Update the hostname, hosts, and resolv.conf files?", "No")[0].lower()
-        if modifyNetworking == 'y':
-            installObject.modifyNetworking = True
-        if self.promptDownloadWars:
-            download_wars = self.getPrompt("Download latest war files?", "No")[0].lower()
-            if download_wars == 'y':
-                installObject.downloadWars = True
-        deploy_saml = self.getPrompt("Configure Shibboleth SAML IDP and SP?", "No")[0].lower()
-        if deploy_saml == 'y':
-            installObject.configureSaml = True
-
-
-    def downloadWarFiles(self):
-        if self.downloadWars:
-            print "Downloading latest oxAuth war file..."
-            self.run(['/usr/bin/wget', self.oxauth_war, '-O', '%s/oxauth.war' % self.tomcatWebAppFolder])
-            print "Downloading latest oxTrust war file..."
-            self.run(['/usr/bin/wget', self.oxtrust_war, '-O', '%s/identity.war' % self.tomcatWebAppFolder])
-            print "Downloading latest Shibboleth IDP war file..."
-            self.run(['/usr/bin/wget', self.idp_war, '-O', '%s/idp.war' % self.idpWarFolder])
-            print "Finished downloading latest war files"
-
-    def install_cas_war(self):
-        casWar = 'oxcas.war'
-        distCasPath = '%s/%s' % (self.distFolder, casWar)
-        tmpCasDir = '%s/tmp_cas' % self.distFolder
-
-        self.logIt("Unpacking %s..." % casWar)
-        self.removeDirs(tmpCasDir)
-        self.createDirs(tmpCasDir)
-
-        self.run([self.jarCommand,
-                  'xf',
-                  distCasPath],
-                 tmpCasDir)
-
-        self.logIt("Configuring CAS...")
-        casTemplatePropertiesPath = '%s/cas.properties' % self.outputFolder
-        casWarPropertiesPath = '%s/WEB-INF/cas.properties' % tmpCasDir
-        
-        self.copyFile(casTemplatePropertiesPath, casWarPropertiesPath)
-
-        self.logIt("Generating cas.war...")
-        self.run([self.jarCommand,
-                  'cmf',
-                  'tmp_cas/META-INF/MANIFEST.MF',
-                  'cas.war',
-                  '-C',
-                  '%s/' % tmpCasDir ,
-                  '.'],
-                 self.distFolder)
-
-        self.logIt("Copying cas.war into tomcat webapps folder...")
-        self.copyFile('%s/cas.war' % self.distFolder, self.tomcatWebAppFolder)
-
-        self.removeDirs(tmpCasDir)
-        self.removeFile('%s/cas.war' % self.distFolder)
-
-    def install_asimba_war(self):
-        asimbaWar = 'oxasimba.war'
-        distAsimbaPath = '%s/%s' % (self.distFolder, asimbaWar)
-        tmpAsimbaDir = '%s/tmp_asimba' % self.distFolder
-
-        self.logIt("Unpacking %s..." % asimbaWar)
-        self.removeDirs(tmpAsimbaDir)
-        self.createDirs(tmpAsimbaDir)
-
-        self.run([self.jarCommand,
-                  'xf',
-                  distAsimbaPath],
-                 tmpAsimbaDir)
-
-        self.logIt("Configuring Asimba...")
-        asimbaTemplateConfigurationPath = '%s/asimba.xml' % self.outputFolder
-        asimbaWarConfigurationPath = '%s/WEB-INF/conf/asimba.xml' % tmpAsimbaDir
-        
-        self.copyFile(asimbaTemplateConfigurationPath, asimbaWarConfigurationPath)
-
-        self.logIt("Generating asimba.war...")
-        self.run([self.jarCommand,
-                  'cmf',
-                  'tmp_asimba/META-INF/MANIFEST.MF',
-                  'asimba.war',
-                  '-C',
-                  '%s/' % tmpAsimbaDir ,
-                  '.'],
-                 self.distFolder)
-
-        self.logIt("Copying asimba.war into tomcat webapps folder...")
-        self.copyFile('%s/asimba.war' % self.distFolder, self.tomcatWebAppFolder)
-
-        self.removeDirs(tmpAsimbaDir)
-        self.removeFile('%s/asimba.war' % self.distFolder)
-    
-    def export_opendj_public_cert(self):
-        # Load password to acces OpenDJ truststore
-        self.logIt("Reding OpenDJ truststore")
-
-        openDjPinFn = '%s/config/keystore.pin' % self.ldapBaseFolder
-        openDjTruststoreFn = '%s/config/truststore' % self.ldapBaseFolder
-
-        openDjPin = None
-        try:
-            f = open(openDjPinFn)
-            openDjPin = f.read().splitlines()[0]
-            f.close()
-        except:
-            self.logIt("Error reding OpenDJ truststore", True)
-            self.logIt(traceback.format_exc(), True)
-
-        # Export public OpenDJ certificate
-        self.logIt("Exporting OpenDJ certificate")
-        self.run([self.keytoolCommand,
-                  '-exportcert',
-                  '-keystore',
-                  openDjTruststoreFn,
-                  '-storepass',
-                  openDjPin,
-                  '-file',
-                  self.openDjCertFn,
-                  '-alias',
-                  'server-cert',
-                  '-rfc'])
+############################   Main Loop   #################################################
 
 def print_help():
     print "\nUse setup.py to configure your Gluu Server and to add initial data required for"
@@ -1235,51 +1302,95 @@ def print_help():
     print "properties will automatically be used instead of the interactive setup."
     print "Options:"
     print ""
-    print "    -h   Help"
-    print "    -f   specify setup.properties file"
+    print "    -a   Install Asimba"
+    print "    -c   Install CAS"
     print "    -d   specify directory of installation"
+    print "    -D   use Docker"
+    print "    -f   specify setup.properties file"
+    print "    -h   Help"
+    print "    -l   Install LDAP"
     print "    -n   No interactive prompt before install starts."
-    print "    -w   Get the latest war files"
+    print "    -N   No apache httpd server"
+    print "    -s   Install the Shibboleth IDP"
+    print "    -u   Update hosts file with IP address / hostname"
+    print "    -w   Get the development head war files"
 
-def getOpts(argv, install_dir=None):
-    setup_properties = None
-    noPrompt = False
-    downloadWarsBoolean = False
+def getOpts(argv, setupOptions):
     try:
-        opts, args = getopt.getopt(argv, "d:hnf:w")
+        opts, args = getopt.getopt(argv, "acd:DfhlNn:suw")
     except getopt.GetoptError:
         print_help()
         sys.exit(2)
     for opt, arg in opts:
-        if opt == '-h':
+        if opt == '-a':
+            setupOptions['installAsimba'] = True
+        elif opt == '-c':
+            setupOptions['installCAS'] = True
+        elif opt == '-d':
+            if os.path.exists(arg):
+                setupOptions['install_dir'] = arg
+            else:
+                print 'System folder %s does not exist. Installing in %s' % (arg, os.getcwd())
+        elif opt == '-h':
             print_help()
             sys.exit()
-        elif opt == '-d':
-            install_dir = arg
+        elif opt == '-l':
+            setupOptions['installLDAP'] = True
         elif opt == "-f":
             try:
                 if os.path.isfile(arg):
-                    setup_properties = arg
+                    setupOptions['setup_properties'] = arg
                     print "Found setup properties %s\n" % arg
                 else:
-                    print "\nOoops... %s file not found\n" % arg
+                    print "\nOoops... %s file not found for setup properties.\n" % arg
             except:
                 print "\nOoops... %s file not found\n" % arg
         elif opt == "-n":
-            noPrompt = True
+            setupOptions['noPrompt'] = True
+        elif opt == "-N":
+            setupOptions['installHTTPD'] = False
+        elif opt == "-s":
+            setupOptions['installSAML'] = True
+        elif opt == "-u":
+            setupOptions['modifyNetworking'] = True
         elif opt == "-w":
-            downloadWarsBoolean = True
-    return setup_properties, noPrompt, install_dir, downloadWarsBoolean
+            setupOptions['downloadWars'] = True
+        elif opt == "-D":
+            setupOptions['useDocker'] = True
+    return setupOptions
 
 if __name__ == '__main__':
-    setup_properties = None
-    noPrompt = False
-    downloadWarOption = False
-    install_dir = "."
+    setupOptions = {
+        'install_dir': '.',
+        'setup_properties': None,
+        'noPrompt': False,
+        'downloadWars': False,
+        'useDocker': False,
+        'installOxAuth': True,
+        'installOxTrust': True,
+        'installLDAP': True,
+        'installHTTPD': True,
+        'installSAML': False,
+        'installAsimba': False,
+        'installCAS': False,
+        'modifyNetworking': False
+    }
     if len(sys.argv) > 1:
-        setup_properties, noPrompt, install_dir, downloadWarOption = getOpts(sys.argv[1:], install_dir)
-    installObject = Setup(install_dir)
-    installObject.downloadWars = downloadWarOption
+        setupOptions = getOpts(sys.argv[1:], setupOptions)
+
+    installObject = Setup(setupOptions['install_dir'])
+
+    installObject.useDocker = setupOptions['useDocker']
+    installObject.downloadWars = setupOptions['downloadWars']
+    installObject.modifyNetworking = setupOptions['modifyNetworking']
+
+    installObject.components['oxauth']['enabled'] = setupOptions['installOxAuth']
+    installObject.components['oxtrust']['enabled'] = setupOptions['installOxTrust']
+    installObject.components['ldap']['enabled'] = setupOptions['installLDAP']
+    installObject.components['httpd']['enabled'] = setupOptions['installHTTPD']
+    installObject.components['saml']['enabled'] = setupOptions['installSAML']
+    installObject.components['asimba']['enabled'] = setupOptions['installAsimba']
+    installObject.components['cas']['enabled'] = setupOptions['installCAS']
 
     print "\nInstalling Gluu Server...\n\nFor more info see:\n  %s  \n  %s\n" % (installObject.log, installObject.logError)
     print "\n** All clear text passwords contained in %s.\n" % installObject.savedProperties
@@ -1296,9 +1407,9 @@ if __name__ == '__main__':
 
     installObject.logIt("Installing Gluu Server", True)
 
-    if setup_properties:
-        installObject.logIt('%s Properties found!\n' % setup_properties)
-        installObject.load_properties(setup_properties)
+    if setupOptions['setup_properties']:
+        installObject.logIt('%s Properties found!\n' % setupOptions['setup_properties'])
+        installObject.load_properties(setupOptions['setup_properties'])
     elif os.path.isfile(installObject.setup_properties_fn):
         installObject.logIt('%s Properties found!\n' % installObject.setup_properties_fn)
         installObject.load_properties(installObject.setup_properties_fn)
@@ -1312,14 +1423,14 @@ if __name__ == '__main__':
     # Show to properties for approval
     print '\n%s\n' % `installObject`
     proceed = "NO"
-    if not noPrompt:
+    if not setupOptions['noPrompt']:
         proceed = raw_input('Proceed with these values [Y|n] ').lower().strip()
-    if (noPrompt or not len(proceed) or (len(proceed) and (proceed[0] == 'y'))):
+    if (setupOptions['noPrompt'] or not len(proceed) or (len(proceed) and (proceed[0] == 'y'))):
         try:
             installObject.makeFolders()
             installObject.make_salt()
             installObject.downloadWarFiles()
-            installObject.modify_netowrking_prompt()
+            installObject.modify_networking_prompt()
             installObject.writeLdapPW()
             installObject.copy_scripts()
             installObject.encode_passwords()
@@ -1350,3 +1461,5 @@ if __name__ == '__main__':
         installObject.save_properties()
         print "Properties saved to %s. Change filename to %s if you want to re-use" % \
                          (installObject.savedProperties, installObject.setup_properties_fn)
+
+# END
