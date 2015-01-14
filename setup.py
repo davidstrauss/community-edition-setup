@@ -489,6 +489,8 @@ class Setup(object):
 
         self.createDirs("%s/conf/template/conf" % self.tomcatHome)
         self.copyFile("%s/static/oxtrust/oxTrustCacheRefresh-template.properties.vm" % self.install_dir, "%s/conf/template/conf" % self.tomcatHome)
+        
+        self.copyFile("%s/static/tomcat/idp.xml" % self.install_dir, "%s/conf/Catalina/localhost/" % self.tomcatHome)
 
     def createDirs(self, name):
         try:
@@ -981,25 +983,26 @@ class Setup(object):
     def makeFolders(self):
         try:
             # Create these folder on all instances
-            self.run(['bin/mkdir', '-p', self.configFolder])
-            self.run(['bin/mkdir', '-p', self.certFolder])
+            mkdir = '/bin/mkdir'
+            self.run([mkdir, '-p', self.configFolder])
+            self.run([mkdir, '-p', self.certFolder])
 
             if self.components['oxtrust']['enabled'] | self.components['oxauth']['enabled']:
-                self.run(['/bin/mkir', '-p', self.gluuOptFolder])
-                self.run(['bin/mkdir', '-p', self.gluuOptBinFolder])
-                self.run(['bin/mkdir', '-p', self.tomcat_user_home_lib])
-                self.run(['bin/mkdir', '-p', self.oxPhotosFolder])
-                self.run(['bin/mkdir', '-p', self.oxTrustRemovedFolder])
+                self.run([mkdir, '-p', self.gluuOptFolder])
+                self.run([mkdir, '-p', self.gluuOptBinFolder])
+                self.run([mkdir, '-p', self.tomcat_user_home_lib])
+                self.run([mkdir, '-p', self.oxPhotosFolder])
+                self.run([mkdir, '-p', self.oxTrustRemovedFolder])
 
             if self.components['saml']['enabled']:
-                self.run(['bin/mkdir', '-p', self.idpFolder])
-                self.run(['bin/mkdir', '-p', self.idpMetadataFolder])
-                self.run(['bin/mkdir', '-p', self.idpLogsFolder])
-                self.run(['bin/mkdir', '-p', self.idpLibFolder])
-                self.run(['bin/mkdir', '-p', self.idpConfFolder])
-                self.run(['bin/mkdir', '-p', self.idpSslFolder])
-                self.run(['bin/mkdir', '-p', self.idpTempMetadataFolder])
-                self.run(['bin/mkdir', '-p', self.idpWarFolder])
+                self.run([mkdir, '-p', self.idpFolder])
+                self.run([mkdir, '-p', self.idpMetadataFolder])
+                self.run([mkdir, '-p', self.idpLogsFolder])
+                self.run([mkdir, '-p', self.idpLibFolder])
+                self.run([mkdir, '-p', self.idpConfFolder])
+                self.run([mkdir, '-p', self.idpSslFolder])
+                self.run([mkdir, '-p', self.idpTempMetadataFolder])
+                self.run([mkdir, '-p', self.idpWarFolder])
         except:
             self.logIt("Error making folders", True)
             self.logIt(traceback.format_exc(), True)
@@ -1107,25 +1110,25 @@ class Setup(object):
             if promptForHTTPD == 'y':
                 installObject.components['httpd']['enabled'] = True
             else:
-                installObject.components['httpd']['enabled'] = True
+                installObject.components['httpd']['enabled'] = False
 
             promptForShibIDP = self.getPrompt("Install Shibboleth SAML IDP?", "No")[0].lower()
             if promptForShibIDP == 'y':
                 installObject.components['saml']['enabled'] = True
             else:
-                installObject.components['saml']['enabled'] = True
+                installObject.components['saml']['enabled'] = False
 
             promptForAsimba = self.getPrompt("Install Asimba SAML Proxy?", "No")[0].lower()
             if promptForAsimba == 'y':
                 installObject.components['asimba']['enabled'] = True
             else:
-                installObject.components['asimba']['enabled'] = True
+                installObject.components['asimba']['enabled'] = False
 
             promptForCAS = self.getPrompt("Install CAS?", "No")[0].lower()
             if promptForCAS == 'y':
                 installObject.components['cas']['enabled'] = True
             else:
-                installObject.components['cas']['enabled'] = True
+                installObject.components['cas']['enabled'] = False
 
     def removeDirs(self, name):
         try:
@@ -1305,7 +1308,6 @@ def print_help():
     print "    -a   Install Asimba"
     print "    -c   Install CAS"
     print "    -d   specify directory of installation"
-    print "    -D   use Docker"
     print "    -f   specify setup.properties file"
     print "    -h   Help"
     print "    -l   Install LDAP"
@@ -1317,7 +1319,7 @@ def print_help():
 
 def getOpts(argv, setupOptions):
     try:
-        opts, args = getopt.getopt(argv, "acd:DfhlNn:suw")
+        opts, args = getopt.getopt(argv, "acd:fhlNn:suw")
     except getopt.GetoptError:
         print_help()
         sys.exit(2)
@@ -1355,8 +1357,6 @@ def getOpts(argv, setupOptions):
             setupOptions['modifyNetworking'] = True
         elif opt == "-w":
             setupOptions['downloadWars'] = True
-        elif opt == "-D":
-            setupOptions['useDocker'] = True
     return setupOptions
 
 if __name__ == '__main__':
@@ -1365,7 +1365,6 @@ if __name__ == '__main__':
         'setup_properties': None,
         'noPrompt': False,
         'downloadWars': False,
-        'useDocker': False,
         'installOxAuth': True,
         'installOxTrust': True,
         'installLDAP': True,
@@ -1380,7 +1379,6 @@ if __name__ == '__main__':
 
     installObject = Setup(setupOptions['install_dir'])
 
-    installObject.useDocker = setupOptions['useDocker']
     installObject.downloadWars = setupOptions['downloadWars']
     installObject.modifyNetworking = setupOptions['modifyNetworking']
 
