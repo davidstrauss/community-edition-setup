@@ -44,7 +44,7 @@ class Setup(object):
         self.install_dir = install_dir
 
         self.oxVersion = '2.0.0.Final'
-        self.githubBranchName = 'master'
+        self.githubBranchName = 'version_2.0'
 
         # Used only if -w (get wars) options is given to setup.py
         self.oxtrust_war = 'https://ox.gluu.org/maven/org/xdi/oxtrust-server/%s/oxtrust-server-%s.war' % (self.oxVersion, self.oxVersion)
